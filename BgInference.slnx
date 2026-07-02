@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="BgInference.Tests/BgInference.Tests.csproj" />
+  <Project Path="BgInference/BgInference.csproj" />
+</Solution>
