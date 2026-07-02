@@ -50,6 +50,18 @@ public sealed class ParityGateTests
         Assert.Equal(0.0, ParityFixture.Vectors.FeatureToleranceAbs); // encoding pin is bit-exact by contract
     }
 
+    [Fact]
+    public void Gate3_MetadataHandshake_ParityModelLoads()
+    {
+        // Load() performs the handshake; reaching the assertions means it passed.
+        var evaluator = ParityFixture.Evaluator;
+
+        Assert.Equal("1", evaluator.ModelMetadata["bgrl.encoding_version"]);
+        Assert.Equal("303", evaluator.ModelMetadata["bgrl.input_size"]);
+        Assert.Equal("6", evaluator.ModelMetadata["bgrl.num_outputs"]);
+        Assert.Equal("parity", evaluator.ModelMetadata["bgrl.model_role"]);
+    }
+
     public static TheoryData<string> CaseLabels()
     {
         var labels = new TheoryData<string>();
@@ -83,6 +95,76 @@ public sealed class ParityGateTests
                 Assert.Fail(
                     $"Case '{label}': feature[{i}] expected {expected:R}, got {actual[i]:R} " +
                     $"(tolerance {tolerance}). The C# encoder has diverged from encode_board.");
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(CaseLabels))]
+    public void Gate5_InferencePin_FeaturesToOutput(string label)
+    {
+        var parityCase = ParityFixture.Case(label);
+        var features = parityCase.Features.Select(d => (float)d).ToArray();
+
+        var evaluation = ParityFixture.Evaluator.RunInference(features, count: 1)[0];
+
+        AssertOutputWithinTolerance(label, parityCase, evaluation);
+    }
+
+    [Fact]
+    public void Gate5_InferencePin_HoldsForTheWholeBatchInOneRun()
+    {
+        // Same pin, all 28 rows in a single model invocation — the dynamic
+        // batch dimension must not change any row's result.
+        var cases = ParityFixture.Vectors.Cases;
+        var features = new float[cases.Count * BgInference.FeatureEncoder.FeatureSize];
+        for (int i = 0; i < cases.Count; i++)
+        {
+            for (int j = 0; j < BgInference.FeatureEncoder.FeatureSize; j++)
+                features[(i * BgInference.FeatureEncoder.FeatureSize) + j] = (float)cases[i].Features[j];
+        }
+
+        var evaluations = ParityFixture.Evaluator.RunInference(features, cases.Count);
+
+        for (int i = 0; i < cases.Count; i++)
+            AssertOutputWithinTolerance(cases[i].Label, cases[i], evaluations[i]);
+    }
+
+    [Fact]
+    public void PublicPipeline_BoardToOutput_MatchesFixtureForOnRollCases()
+    {
+        // Ties the whole public path (BoardState → derived offs → features →
+        // inference) to the fixture. Only on-roll cases apply: the public
+        // evaluator always encodes player-to-move, by design.
+        var cases = ParityFixture.Vectors.Cases.Where(c => c.Board.PlayerToMove).ToList();
+        Assert.NotEmpty(cases);
+
+        var boards = cases.Select(c => ParityFixture.ToBoardState(c.Board)).ToList();
+        var evaluations = ParityFixture.Evaluator.EvaluateBatch(boards);
+
+        for (int i = 0; i < cases.Count; i++)
+            AssertOutputWithinTolerance(cases[i].Label, cases[i], evaluations[i]);
+    }
+
+    private static void AssertOutputWithinTolerance(
+        string label, ParityCase parityCase, BgInference.PositionEvaluation evaluation)
+    {
+        Assert.Equal(6, parityCase.Output.Count);
+        float[] actual =
+        [
+            evaluation.PWin, evaluation.PWinGammon, evaluation.PWinBackgammon,
+            evaluation.PLose, evaluation.PLoseGammon, evaluation.PLoseBackgammon,
+        ];
+
+        double tolerance = ParityFixture.Vectors.OutputToleranceAbs;
+        for (int j = 0; j < actual.Length; j++)
+        {
+            float expected = (float)parityCase.Output[j];
+            if (!(Math.Abs(actual[j] - expected) <= tolerance))
+            {
+                Assert.Fail(
+                    $"Case '{label}': output[{j}] expected {expected:R}, got {actual[j]:R} " +
+                    $"(tolerance {tolerance}). C# inference has diverged from the producer's ONNX Runtime run.");
             }
         }
     }

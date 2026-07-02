@@ -34,6 +34,16 @@ internal static class ParityFixture
     /// <summary>The parsed vectors file (header + all golden cases).</summary>
     internal static ParityVectors Vectors => _vectors.Value;
 
+    private static readonly Lazy<OnnxEvaluator> _evaluator = new(() =>
+        OnnxEvaluator.Load(ModelPath));
+
+    /// <summary>
+    /// A shared evaluator over the parity model. Deliberately never disposed:
+    /// one tiny native session for the whole test run, released at process
+    /// exit. Tests that exercise disposal load their own instance.
+    /// </summary>
+    internal static OnnxEvaluator Evaluator => _evaluator.Value;
+
     /// <summary>Find a golden case by its unique label.</summary>
     internal static ParityCase Case(string label) =>
         Vectors.Cases.Single(c => c.Label == label);
