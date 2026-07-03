@@ -6,8 +6,10 @@ using BgInference;
 
 /// <summary>
 /// The v1 threshold cube policy: boundary semantics on both constants, and —
-/// load-bearing — the responder-side perspective negation, since MatchRunner
-/// hands the responder a state still in the offerer's on-roll frame.
+/// load-bearing — that the response side reads the responder's own frame
+/// directly. Under the unified perspective convention the responder is queried
+/// in its own frame, so no negation is applied; the two-direction pin guards
+/// against a stray one being reintroduced.
 /// </summary>
 public sealed class ThresholdCubeAgentTests
 {
@@ -30,28 +32,30 @@ public sealed class ThresholdCubeAgentTests
     }
 
     [Theory]
-    [InlineData(0.5f, CubeAction.Take)]      // own equity −0.5: dead-cube boundary, inclusive
-    [InlineData(0.51f, CubeAction.Pass)]     // own equity −0.51: below the take point
+    [InlineData(-0.5f, CubeAction.Take)]     // own equity −0.5: dead-cube boundary, inclusive
+    [InlineData(-0.51f, CubeAction.Pass)]    // own equity −0.51: below the take point
     [InlineData(0f, CubeAction.Take)]
-    [InlineData(-0.3f, CubeAction.Take)]     // a bad double: happily taken
-    public async Task Response_TakesAtOrAboveTakePoint_InOwnNegatedEquity(
-        float offererEquity, CubeAction expected)
+    [InlineData(0.3f, CubeAction.Take)]      // a bad double: happily taken
+    public async Task Response_TakesAtOrAboveTakePoint(float ownEquity, CubeAction expected)
     {
-        var response = await AgentSeeing(offererEquity).ChooseResponseAsync(SomeState());
+        // Responder frame: the evaluator's folded equity is the responder's own.
+        var response = await AgentSeeing(ownEquity).ChooseResponseAsync(SomeState());
         Assert.Equal(expected, response);
     }
 
     [Fact]
-    public async Task Response_NegatesTheOffererFrame_BothDirections()
+    public async Task Response_ReadsResponderFrameEquity_BothDirections()
     {
-        // The state reaching the responder is in the offerer's perspective.
-        // Crushed responder (offerer equity +2): un-negated, +2 ≥ −0.5 would
-        // wrongly Take; negated, −2 correctly Passes.
-        Assert.Equal(CubeAction.Pass, await AgentSeeing(2f).ChooseResponseAsync(SomeState()));
+        // The state reaching the responder is already in the responder's own
+        // frame, so the folded equity is read directly.
+        //
+        // Crushed responder (own equity −2): −2 < −0.5 correctly Passes; a stray
+        // negation would flip this to +2 ≥ −0.5 and wrongly Take.
+        Assert.Equal(CubeAction.Pass, await AgentSeeing(-2f).ChooseResponseAsync(SomeState()));
 
-        // Dominant responder (offerer equity −2): un-negated, −2 < −0.5 would
-        // wrongly Pass; negated, +2 correctly Takes.
-        Assert.Equal(CubeAction.Take, await AgentSeeing(-2f).ChooseResponseAsync(SomeState()));
+        // Dominant responder (own equity +2): +2 ≥ −0.5 correctly Takes; a stray
+        // negation would flip this to −2 < −0.5 and wrongly Pass.
+        Assert.Equal(CubeAction.Take, await AgentSeeing(2f).ChooseResponseAsync(SomeState()));
     }
 
     [Fact]

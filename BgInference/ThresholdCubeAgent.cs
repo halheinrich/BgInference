@@ -19,11 +19,14 @@ using BgGame_Lib;
 /// </para>
 ///
 /// <para>
-/// <b>Perspective.</b> <c>MatchRunner</c> passes the responder a
-/// <see cref="GameState"/> still in the <em>offerer's</em> on-roll
-/// perspective (see its "Perspective note for cube responders"), so
-/// <see cref="ChooseResponseAsync"/> negates the folded equity before
-/// comparing — the cube-side twin of the play agent's successor negation.
+/// <b>Perspective.</b> Both methods are queried in the deciding agent's own
+/// frame — the unified convention across every agent query (see
+/// <see cref="ICubeAgent"/>'s perspective contract). The folded equity is
+/// therefore already the deciding player's own on both the offer and the
+/// response side, so neither negates. (The responder frame is constructed by
+/// the driver: <c>MatchRunner</c> hands <see cref="ChooseResponseAsync"/> a
+/// detached <see cref="GameState.OpponentView"/> of the live offerer-frame
+/// state.)
 /// </para>
 /// </summary>
 public sealed class ThresholdCubeAgent : ICubeAgent
@@ -69,9 +72,9 @@ public sealed class ThresholdCubeAgent : ICubeAgent
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The state is in the offerer's on-roll frame; own equity is the negation.
-        float offererEquity = _evaluator.Evaluate(state.Board).Equity(EquityWeights.Money);
-        float ownEquity = -offererEquity;
+        // Responder-frame convention: the folded equity is already the
+        // responder's own — no negation (see the class's Perspective note).
+        float ownEquity = _evaluator.Evaluate(state.Board).Equity(EquityWeights.Money);
         return ValueTask.FromResult(
             ownEquity >= TakeEquityThreshold ? CubeAction.Take : CubeAction.Pass);
     }

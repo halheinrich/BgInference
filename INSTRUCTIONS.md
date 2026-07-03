@@ -56,7 +56,7 @@ BgInference/
     ├── OnnxEvaluatorTests.cs       handshake end-to-end + evaluation surface
     ├── PositionEvaluationTests.cs  equity-fold pins
     ├── OnePlyPlayAgentTests.cs     perspective-negation pin + policy contract
-    ├── ThresholdCubeAgentTests.cs  threshold boundaries + responder negation
+    ├── ThresholdCubeAgentTests.cs  threshold boundaries + responder-frame pin
     ├── MatchIntegrationTests.cs    seeded full matches via MatchRunner
     └── TestAgents.cs               transparent stub evaluators + trivial bots
 ```
@@ -174,18 +174,23 @@ export whose encoding version matches; nothing here is parity-model-specific.
 
 ## Pitfalls
 
-- **Three perspective boundaries live in this library; each has a named
+- **Two perspective boundaries live in this library; each has a named
   pinning test.** (1) Successor evaluation: `ApplyPlay` flips the board, so
   `OnePlyPlayAgent` negates folded equity —
   `NegationPin_ChoosesTheHit_WhereUnNegatedArgmaxProvablyWouldNot`.
-  (2) Cube response: `MatchRunner` hands the responder a state still in the
-  *offerer's* frame, so `ThresholdCubeAgent.ChooseResponseAsync` negates —
-  `Response_NegatesTheOffererFrame_BothDirections`. (3) The encoder's
-  `player_to_move` flag: the public evaluator always encodes `true`; the flag
-  exists for the producer's training-record encodings and is exercised by the
-  fixture's `player_to_move: false` cases — parity gate +
+  (2) The encoder's `player_to_move` flag: the public evaluator always encodes
+  `true`; the flag exists for the producer's training-record encodings and is
+  exercised by the fixture's `player_to_move: false` cases — parity gate +
   `PlayerToMove_FlipsExactlyOneFeature`. A sign change that dodges its pin is
   a bug in the pin, not a green light.
+  **The cube-response boundary was eliminated**, not pinned: it was a third
+  boundary while `MatchRunner` handed the responder a state in the *offerer's*
+  frame (so `ChooseResponseAsync` negated). The perspective-unification work
+  (BgGame_Lib's responder-frame `ChooseResponseAsync` re-contract — the
+  queried player always sees its own frame) deleted that trap class; the
+  responder now reads its own folded equity directly, pinned by
+  `Response_ReadsResponderFrameEquity_BothDirections`. That two-direction pin
+  is what guards against a stray negation being reintroduced.
 - **Bit-exactness is arithmetic-shape-sensitive.** Compute in `double`, narrow
   to `float`, per slot. "Simplifying" `(float)(count / 15.0)` to float
   division, or reordering the pip-ratio arithmetic, can break the encoding pin
