@@ -1,4 +1,7 @@
 <Solution>
+  <Project Path="../BgDataTypes_Lib/BgDataTypes_Lib/BgDataTypes_Lib.csproj" />
+  <Project Path="../BgGame_Lib/BgGame_Lib/BgGame_Lib.csproj" />
+  <Project Path="../BgMoveGen/BgMoveGen/BgMoveGen.csproj" />
   <Project Path="BgInference.Tests/BgInference.Tests.csproj" />
   <Project Path="BgInference/BgInference.csproj" />
 </Solution>
