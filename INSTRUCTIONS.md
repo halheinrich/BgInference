@@ -31,35 +31,35 @@ https://github.com/halheinrich/BgInference — branch `main`.
   test project reads in place from the sibling checkout. Not a build
   dependency.
 
-## Directory tree
+## Layout
 
-```
-BgInference/
-├── BgInference.slnx
-├── Directory.Packages.props        CPM — inline Version= is banned
-├── INSTRUCTIONS.md
-├── BgInference/
-│   ├── BgInference.csproj          net10.0; TreatWarningsAsErrors; XML docs enforced
-│   ├── FeatureEncoder.cs           internal 303-feature mirror of encode_board
-│   ├── IPositionEvaluator.cs       the public evaluation seam
-│   ├── OnnxEvaluator.cs            ORT session wrapper: handshake at Load, batch inference
-│   ├── PositionEvaluation.cs       six outcome estimates + equity fold
-│   ├── EquityWeights.cs            fold weights; Money mirrors compute_equity's default
-│   ├── ModelContractException.cs   named fail-fast handshake failures
-│   ├── OnePlyPlayAgent.cs          IPlayAgent: one-ply argmax over negated successors
-│   └── ThresholdCubeAgent.cs       ICubeAgent v1: crude cubeless-equity thresholds
-└── BgInference.Tests/
-    ├── BgInference.Tests.csproj
-    ├── ParityFixture.cs            locates + parses BgRLEngine's parity fixtures
-    ├── ParityGateTests.cs          the five-step cross-language parity gate
-    ├── FeatureEncoderTests.cs      per-feature-family unit pins
-    ├── OnnxEvaluatorTests.cs       handshake end-to-end + evaluation surface
-    ├── PositionEvaluationTests.cs  equity-fold pins
-    ├── OnePlyPlayAgentTests.cs     perspective-negation pin + policy contract
-    ├── ThresholdCubeAgentTests.cs  threshold boundaries + responder-frame pin
-    ├── MatchIntegrationTests.cs    seeded full matches via MatchRunner
-    └── TestAgents.cs               transparent stub evaluators + trivial bots
-```
+Two projects under `BgInference.slnx`, governed by repo-root
+`Directory.Build.props` (TFM, nullable, `TreatWarningsAsErrors`, XML doc
+generation) and `Directory.Packages.props` (Central Package Management —
+no inline `Version=`).
+
+**`BgInference/`** — the library. Three areas:
+
+- **Evaluation** — `IPositionEvaluator`, the public seam (board in, outcome
+  estimates out, single or batched); `OnnxEvaluator`, its ONNX Runtime
+  implementation, which runs the fail-fast contract handshake at `Load`;
+  `ModelContractException`, the handshake's named failures; and the
+  internal `FeatureEncoder`, the mirror of the producer's 303-feature
+  `encode_board`.
+- **Outcomes and equity** — `PositionEvaluation`, the six outcome
+  estimates and their equity fold; `EquityWeights`, the fold weights, whose
+  `Money` set mirrors the producer's `compute_equity` default.
+- **Agents** — `OnePlyPlayAgent`, the `IPlayAgent` taking the best one-ply
+  successor under the negated opponent-frame equity; `ThresholdCubeAgent`,
+  the v1 `ICubeAgent` of deliberately crude cubeless-money thresholds.
+
+**`BgInference.Tests/`** — xUnit. The cross-language parity gate
+(`ParityGateTests`), fed by `ParityFixture`, which reads BgRLEngine's
+committed parity model and vectors in place from the sibling checkout; per
+feature-family encoder pins; the evaluator's handshake and surface; the
+equity fold; each agent's contract; and seeded full matches through
+`MatchRunner`. `TestAgents` holds the transparent stub evaluators and the
+trivial opponent bots.
 
 ## Architecture
 
