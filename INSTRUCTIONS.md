@@ -113,7 +113,9 @@ count from the position (`BoardPosition.OnRollBorneOffCount` /
 `OpponentBorneOffCount`), encodes `playerToMove: true` (the public path is
 always the on-roll perspective), and runs one ORT `Run` per batch. Sessions are thread-safe for inference;
 `Dispose` releases the native session. `ModelMetadata` exposes the validated
-`bgrl.*` map for diagnostics and future routing (`bgrl.model_role`).
+`bgrl.*` map for diagnostics and future routing (`bgrl.model_role`), as a
+read-only view over a private copy that a cast cannot write
+(`ModelMetadata_CannotBeWrittenThroughACast`).
 
 **Positions at the boundary.** `IPositionEvaluator` and the encoder take a
 `BoardPosition`, not a `BoardState`: they only read the position. It is the

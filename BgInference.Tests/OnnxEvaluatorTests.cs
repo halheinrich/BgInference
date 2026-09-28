@@ -143,6 +143,21 @@ public sealed class OnnxEvaluatorTests
         ParityFixture.Evaluator.Evaluate(position);
     }
 
+    [Fact]
+    public void ModelMetadata_CannotBeWrittenThroughACast()
+    {
+        // The collection rider (halheinrich/backgammon#273): a read-only view
+        // must not be a live mutable collection that a cast makes writable.
+        // Its own instance, so a regression cannot tamper with the shared one.
+        using var evaluator = OnnxEvaluator.Load(ParityFixture.ModelPath);
+        var metadata = evaluator.ModelMetadata;
+
+        var asDictionary = Assert.IsAssignableFrom<IDictionary<string, string>>(metadata);
+        Assert.True(asDictionary.IsReadOnly);
+        Assert.Throws<NotSupportedException>(() => asDictionary["bgrl.model_role"] = "tampered");
+        Assert.Equal("parity", metadata["bgrl.model_role"]);
+    }
+
     // ── Lifetime ─────────────────────────────────────────────────────
 
     [Fact]
