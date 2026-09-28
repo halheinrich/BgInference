@@ -14,7 +14,7 @@ using BgMoveGen;
 internal static class TestEvaluators
 {
     /// <summary>
-    /// Scores a board as the on-roll player's pip lead:
+    /// Scores a position as the on-roll player's pip lead:
     /// <c>PWin = OpponentPipCount − PipCount</c> (fewer pips remaining =
     /// leading), other slots zero, so <c>Equity(Money) == pip lead</c>.
     /// Ground truth is computable by hand, which is what the
@@ -22,20 +22,44 @@ internal static class TestEvaluators
     /// </summary>
     internal sealed class PipLead : IPositionEvaluator
     {
-        public PositionEvaluation Evaluate(BoardState board) =>
-            new(board.OpponentPipCount - board.PipCount, 0f, 0f, 0f, 0f, 0f);
+        public PositionEvaluation Evaluate(BoardPosition position)
+        {
+            var board = new BoardState(position); // the pip rule is BoardState's
+            return new(board.OpponentPipCount - board.PipCount, 0f, 0f, 0f, 0f, 0f);
+        }
 
-        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardState> boards) =>
-            boards.Select(Evaluate).ToArray();
+        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions) =>
+            positions.Select(Evaluate).ToArray();
     }
 
-    /// <summary>Returns the same evaluation for every board.</summary>
+    /// <summary>Returns the same evaluation for every position.</summary>
     internal sealed class Constant(PositionEvaluation value) : IPositionEvaluator
     {
-        public PositionEvaluation Evaluate(BoardState board) => value;
+        public PositionEvaluation Evaluate(BoardPosition position) => value;
 
-        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardState> boards) =>
-            Enumerable.Repeat(value, boards.Count).ToArray();
+        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions) =>
+            Enumerable.Repeat(value, positions.Count).ToArray();
+    }
+
+    /// <summary>
+    /// Records every position it is asked about, in order, and returns
+    /// <paramref name="value"/> for each — for pinning <em>which</em>
+    /// positions a caller evaluates.
+    /// </summary>
+    internal sealed class Recording(PositionEvaluation value) : IPositionEvaluator
+    {
+        private readonly List<BoardPosition> _seen = [];
+
+        public IReadOnlyList<BoardPosition> Seen => _seen.ToArray();
+
+        public PositionEvaluation Evaluate(BoardPosition position)
+        {
+            _seen.Add(position);
+            return value;
+        }
+
+        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions) =>
+            positions.Select(Evaluate).ToArray();
     }
 
     /// <summary>
@@ -44,10 +68,10 @@ internal static class TestEvaluators
     /// </summary>
     internal sealed class MustNotBeCalled : IPositionEvaluator
     {
-        public PositionEvaluation Evaluate(BoardState board) =>
+        public PositionEvaluation Evaluate(BoardPosition position) =>
             throw new InvalidOperationException("The evaluator must not be consulted on this path.");
 
-        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardState> boards) =>
+        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions) =>
             throw new InvalidOperationException("The evaluator must not be consulted on this path.");
     }
 }

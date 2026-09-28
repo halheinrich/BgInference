@@ -59,6 +59,29 @@ public sealed class ThresholdCubeAgentTests
     }
 
     [Fact]
+    public async Task BothDecisions_EvaluateTheStatesOwnPosition()
+    {
+        // Asymmetric, so neither a fixed position nor the flipped view of this
+        // one can stand in for it.
+        var counts = new int[26];
+        counts[6] = 3;
+        counts[8] = 2;
+        counts[19] = -4;
+        var position = new BoardPosition(counts);
+        Assert.NotEqual(position, position.Flipped());
+
+        var state = GameState.FromPosition(
+            MatchState.NewMatch(0), new BoardState(position), cubeSize: 1, CubeOwner.Centered);
+        var evaluator = new TestEvaluators.Recording(new PositionEvaluation(0f, 0f, 0f, 0f, 0f, 0f));
+        var agent = new ThresholdCubeAgent(evaluator);
+
+        await agent.ChooseOfferAsync(state);
+        await agent.ChooseResponseAsync(state);
+
+        Assert.Equal([position, position], evaluator.Seen);
+    }
+
+    [Fact]
     public async Task NullState_Throws()
     {
         var agent = AgentSeeing(0f);

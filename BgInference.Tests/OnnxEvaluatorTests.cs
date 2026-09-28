@@ -109,10 +109,10 @@ public sealed class OnnxEvaluatorTests
     [Fact]
     public void Evaluate_MatchesBatchRow()
     {
-        var board = BoardState.Standard();
+        var position = BoardPosition.Standard;
 
-        var single = ParityFixture.Evaluator.Evaluate(board);
-        var batch = ParityFixture.Evaluator.EvaluateBatch([board, BoardState.Nackgammon()]);
+        var single = ParityFixture.Evaluator.Evaluate(position);
+        var batch = ParityFixture.Evaluator.EvaluateBatch([position, BoardPosition.Nackgammon]);
 
         Assert.Equal(batch[0], single);
         Assert.NotEqual(batch[1], single); // different position, different row
@@ -132,27 +132,15 @@ public sealed class OnnxEvaluatorTests
     }
 
     [Fact]
-    public void Evaluate_NullBoard_Throws()
+    public void Evaluate_EveryCheckerOff_Evaluates()
     {
-        Assert.Throws<ArgumentNullException>(
-            () => ParityFixture.Evaluator.Evaluate(null!));
-    }
+        // Every checker of both sides off: a terminal position, which the
+        // evaluator must evaluate (match loops can reach one), not refuse.
+        var position = BoardPosition.Empty;
+        Assert.Equal(BoardPosition.CheckersPerSide, position.OnRollBorneOffCount);
+        Assert.Equal(BoardPosition.CheckersPerSide, position.OpponentBorneOffCount);
 
-    [Fact]
-    public void EvaluateBatch_NullElement_ThrowsNamingTheIndex()
-    {
-        var ex = Assert.Throws<ArgumentException>(
-            () => ParityFixture.Evaluator.EvaluateBatch([BoardState.Standard(), null!]));
-        Assert.Contains("boards[1]", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Evaluate_GameOverBoard_Evaluates()
-    {
-        // All checkers off on both sides — degenerate but representable; the
-        // evaluator must tolerate it (match loops can reach it), not throw.
-        var board = BoardState.FromMop(new int[26]);
-        ParityFixture.Evaluator.Evaluate(board);
+        ParityFixture.Evaluator.Evaluate(position);
     }
 
     // ── Lifetime ─────────────────────────────────────────────────────
@@ -164,7 +152,7 @@ public sealed class OnnxEvaluatorTests
         evaluator.Dispose();
 
         Assert.Throws<ObjectDisposedException>(
-            () => evaluator.Evaluate(BoardState.Standard()));
+            () => evaluator.Evaluate(BoardPosition.Standard));
     }
 
     [Fact]

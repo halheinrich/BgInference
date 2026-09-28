@@ -75,12 +75,12 @@ public sealed class ParityGateTests
     public void Gate4_EncodingPin_BitExact(string label)
     {
         var parityCase = ParityFixture.Case(label);
-        var board = ParityFixture.ToBoardState(parityCase.Board);
+        var position = ParityFixture.ToPosition(parityCase.Board);
 
         Assert.Equal(BgInference.FeatureEncoder.FeatureSize, parityCase.Features.Count);
         var actual = new float[BgInference.FeatureEncoder.FeatureSize];
         BgInference.FeatureEncoder.Encode(
-            board,
+            position,
             parityCase.Board.PlayerToMove,
             parityCase.Board.OffPlayer,
             parityCase.Board.OffOpponent,
@@ -133,14 +133,14 @@ public sealed class ParityGateTests
     [Fact]
     public void PublicPipeline_BoardToOutput_MatchesFixtureForOnRollCases()
     {
-        // Ties the whole public path (BoardState → derived offs → features →
-        // inference) to the fixture. Only on-roll cases apply: the public
+        // Ties the whole public path (position → its borne-off counts →
+        // features → inference) to the fixture. Only on-roll cases apply: the public
         // evaluator always encodes player-to-move, by design.
         var cases = ParityFixture.Vectors.Cases.Where(c => c.Board.PlayerToMove).ToList();
         Assert.NotEmpty(cases);
 
-        var boards = cases.Select(c => ParityFixture.ToBoardState(c.Board)).ToList();
-        var evaluations = ParityFixture.Evaluator.EvaluateBatch(boards);
+        var positions = cases.Select(c => ParityFixture.ToPosition(c.Board)).ToList();
+        var evaluations = ParityFixture.Evaluator.EvaluateBatch(positions);
 
         for (int i = 0; i < cases.Count; i++)
             AssertOutputWithinTolerance(cases[i].Label, cases[i], evaluations[i]);

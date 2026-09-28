@@ -49,22 +49,21 @@ internal static class ParityFixture
         Vectors.Cases.Single(c => c.Label == label);
 
     /// <summary>
-    /// Build a <see cref="BoardState"/> from a fixture board's raw fields.
-    /// The producer's <c>points[i]</c> (index 0 = player's 1-point) is
-    /// <c>Points[i + 1]</c> here — same sign convention (positive = the
-    /// perspective player), same orientation; bars map to <c>Points[25]</c>
-    /// (player, ≥ 0) and <c>Points[0]</c> (opponent, stored ≤ 0). Off counts
-    /// and the player-to-move flag are not part of <see cref="BoardState"/>
-    /// and travel separately.
+    /// Build a <see cref="BoardPosition"/> from a fixture board's raw fields,
+    /// in <see cref="BoardPosition"/>'s layout. The producer's
+    /// <c>points[i]</c> (index 0 = the perspective player's 1-point) is slot
+    /// <c>i + 1</c> — same sign convention, same orientation; the player's bar
+    /// is slot 25 and the opponent's is slot 0, negated. Off counts and the
+    /// player-to-move flag are not part of a position and travel separately.
     /// </summary>
-    internal static BoardState ToBoardState(ParityBoard board)
+    internal static BoardPosition ToPosition(ParityBoard board)
     {
-        var mop = new int[26];
-        mop[0] = -board.BarOpponent;
+        var counts = new int[26];
+        counts[0] = -board.BarOpponent;
         for (int i = 0; i < 24; i++)
-            mop[i + 1] = board.Points[i];
-        mop[25] = board.BarPlayer;
-        return BoardState.FromMop(mop);
+            counts[i + 1] = board.Points[i];
+        counts[25] = board.BarPlayer;
+        return new BoardPosition(counts);
     }
 }
 

@@ -70,12 +70,12 @@ public sealed class OnePlyPlayAgent : IPlayAgent
         if (plays.Count == 1)
             return ValueTask.FromResult(plays[0]); // dance or forced — nothing to decide
 
-        var successors = new List<BoardState>(plays.Count);
+        var successors = new List<BoardPosition>(plays.Count);
         foreach (var play in plays)
         {
             var successor = state.Board.Copy();
             successor.ApplyPlay(play); // applies the moves AND flips to the opponent's frame
-            successors.Add(successor);
+            successors.Add(successor.ToPosition());
         }
 
         var evaluations = _evaluator.EvaluateBatch(successors);

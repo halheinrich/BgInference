@@ -60,7 +60,7 @@ public sealed class ThresholdCubeAgent : ICubeAgent
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        float equity = _evaluator.Evaluate(state.Board).Equity(EquityWeights.Money);
+        float equity = _evaluator.Evaluate(state.Board.ToPosition()).Equity(EquityWeights.Money);
         return ValueTask.FromResult(
             equity >= DoubleEquityThreshold ? CubeAction.Double : CubeAction.NoDouble);
     }
@@ -74,7 +74,7 @@ public sealed class ThresholdCubeAgent : ICubeAgent
 
         // Responder-frame convention: the folded equity is already the
         // responder's own — no negation (see the class's Perspective note).
-        float ownEquity = _evaluator.Evaluate(state.Board).Equity(EquityWeights.Money);
+        float ownEquity = _evaluator.Evaluate(state.Board.ToPosition()).Equity(EquityWeights.Money);
         return ValueTask.FromResult(
             ownEquity >= TakeEquityThreshold ? CubeAction.Take : CubeAction.Pass);
     }

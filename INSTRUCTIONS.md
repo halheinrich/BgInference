@@ -19,8 +19,10 @@ https://github.com/halheinrich/BgInference — branch `main`.
 
 ## Depends on
 
-- **BgDataTypes_Lib** — `BoardState` (the on-roll-relative board and its
-  apply/flip primitives), `Play`/`Move`, `CubeAction`.
+- **BgDataTypes_Lib** — `BoardPosition` (the position value the evaluator
+  takes, each side's borne-off count, and `CheckersPerSide`), `BoardState`
+  (the on-roll-relative board and its apply/flip primitives, and the pip and
+  race rules the encoder reads), `Play`/`Move`, `CubeAction`.
 - **BgMoveGen** — `MoveGenerator.GeneratePlays` (candidate plays for one-ply
   selection).
 - **BgGame_Lib** — `IPlayAgent`/`ICubeAgent` contracts, `GameState`/`MatchState`,
@@ -40,8 +42,8 @@ no inline `Version=`).
 
 **`BgInference/`** — the library. Three areas:
 
-- **Evaluation** — `IPositionEvaluator`, the public seam (board in, outcome
-  estimates out, single or batched); `OnnxEvaluator`, its ONNX Runtime
+- **Evaluation** — `IPositionEvaluator`, the public seam (position in,
+  outcome estimates out, single or batched); `OnnxEvaluator`, its ONNX Runtime
   implementation, which runs the fail-fast contract handshake at `Load`;
   `ModelContractException`, the handshake's named failures; and the
   internal `FeatureEncoder`, the mirror of the producer's 303-feature
@@ -90,25 +92,36 @@ counts). Every stored value is computed in `double` and narrowed to `float`
 (numpy's compute-float64/store-float32). Pip counts reuse
 `BoardState.PipCount`/`OpponentPipCount`; the race flag reuses
 `BoardState.IsRace` behind an explicit bar-occupancy guard (see Pitfalls).
+Both are `BoardState`'s rules and `BoardPosition` publishes neither, so the
+encoder reads them from a board built on the position.
 Each side's checker count is the position's, read back from
 `BoardPosition.OnRollBorneOffCount`/`OpponentBorneOffCount`. The divisor and
 the all-off threshold are the producer's `CHECKERS_PER_PLAYER`, the number of
 checkers a side has, so the encoder reads `BoardPosition.CheckersPerSide`,
 that number's one statement, rather than naming its own; the overflow scale,
 a choice of the encoding, stays the encoder's constant.
-Board mapping: producer `points[i]` = `Points[i+1]`, bars = `Points[25]` /
-`−Points[0]`; the borne-off counts and `player_to_move` are encoder
-parameters (see Pitfalls).
+Board mapping, into `BoardPosition`'s layout: producer `points[i]` = slot
+`i+1`, bars = slot 25 / −slot 0; the borne-off counts and `player_to_move`
+are encoder parameters (see Pitfalls).
 
 **OnnxEvaluator.** `Load` is a fail-fast handshake: not-loadable ONNX,
 missing/malformed `bgrl.*` keys, encoding-version mismatch, structural-key
 mismatch, or graph-shape drift each throw a named `ModelContractException`
 before any evaluation is possible. Evaluation takes each side's borne-off
 count from the position (`BoardPosition.OnRollBorneOffCount` /
-`OpponentBorneOffCount`), encodes `playerToMove: true` (the public path is always the on-roll perspective), and
-runs one ORT `Run` per batch. Sessions are thread-safe for inference;
+`OpponentBorneOffCount`), encodes `playerToMove: true` (the public path is
+always the on-roll perspective), and runs one ORT `Run` per batch. Sessions are thread-safe for inference;
 `Dispose` releases the native session. `ModelMetadata` exposes the validated
 `bgrl.*` map for diagnostics and future routing (`bgrl.model_role`).
+
+**Positions at the boundary.** `IPositionEvaluator` and the encoder take a
+`BoardPosition`, not a `BoardState`: they only read the position. It is the
+precedent Hal ruled for `MoveEntryState`'s constructor (2026-09-26, on
+halheinrich/backgammon#273): requiring a board makes a caller holding a
+position build a richer, mutable object for nothing. The one-ply agent hands
+over its successors as positions; the cube agent passes
+`GameState.Board.ToPosition()`. A value cannot be null or be
+changed by the evaluator, so neither needs saying.
 
 **Agents are thin policies over `IPositionEvaluator`.** `OnePlyPlayAgent`
 mirrors the producer's `select_play`: copy → `ApplyPlay` (moves **and** flip
@@ -131,11 +144,12 @@ probability fold `(1, 1, 1, −1, −1, −1)`.
 ```csharp
 public interface IPositionEvaluator
 {
-    // Board is on-roll-relative; the evaluation is from the on-roll player's
-    // perspective. Successors produced by ApplyPlay are in the OPPONENT's
-    // frame — negate the folded equity to reason from the mover's side.
-    PositionEvaluation Evaluate(BoardState board);
-    PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardState> boards); // one Run; empty → empty
+    // A position is read in the on-roll player's frame; the evaluation is from
+    // that player's perspective. Successors (MoveGenerator.GenerateSuccessors)
+    // are in the NEXT MOVER's frame — negate the folded equity to reason from
+    // the mover's side.
+    PositionEvaluation Evaluate(BoardPosition position);
+    PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions); // one Run; empty → empty
 }
 
 public sealed class OnnxEvaluator : IPositionEvaluator, IDisposable

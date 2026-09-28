@@ -80,7 +80,7 @@ public sealed class OnePlyPlayAgentTests
         {
             var successor = board.Copy();
             successor.ApplyPlay(plays[i]);
-            float equity = stub.Evaluate(successor).Equity(EquityWeights.Money); // no negation
+            float equity = stub.Evaluate(successor.ToPosition()).Equity(EquityWeights.Money); // no negation
             if (equity > best)
             {
                 best = equity;

@@ -195,34 +195,29 @@ public sealed class OnnxEvaluator : IPositionEvaluator, IDisposable
     }
 
     /// <inheritdoc />
-    public PositionEvaluation Evaluate(BoardState board)
-    {
-        ArgumentNullException.ThrowIfNull(board);
-        return EvaluateBatch([board])[0];
-    }
+    public PositionEvaluation Evaluate(BoardPosition position) => EvaluateBatch([position])[0];
 
     /// <inheritdoc />
-    public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardState> boards)
+    public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions)
     {
-        ArgumentNullException.ThrowIfNull(boards);
+        ArgumentNullException.ThrowIfNull(positions);
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (boards.Count == 0)
+        if (positions.Count == 0)
             return [];
 
-        var features = new float[boards.Count * FeatureEncoder.FeatureSize];
-        for (int i = 0; i < boards.Count; i++)
+        var features = new float[positions.Count * FeatureEncoder.FeatureSize];
+        for (int i = 0; i < positions.Count; i++)
         {
-            var board = boards[i] ?? throw new ArgumentException($"boards[{i}] is null.", nameof(boards));
-            var position = board.ToPosition();
+            var position = positions[i];
             FeatureEncoder.Encode(
-                board,
+                position,
                 playerToMove: true,
                 position.OnRollBorneOffCount,
                 position.OpponentBorneOffCount,
                 features.AsSpan(i * FeatureEncoder.FeatureSize, FeatureEncoder.FeatureSize));
         }
 
-        return RunInference(features, boards.Count);
+        return RunInference(features, positions.Count);
     }
 
     /// <summary>

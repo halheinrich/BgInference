@@ -23,13 +23,13 @@ public sealed class FeatureEncoderTests
     private const int PlayerCountIndex = 301;
     private const int OpponentCountIndex = 302;
 
-    private static float[] Encode(int[] mop, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0) =>
-        Encode(BoardState.FromMop(mop), playerToMove, offPlayer, offOpponent);
+    private static float[] Encode(int[] counts, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0) =>
+        Encode(new BoardPosition(counts), playerToMove, offPlayer, offOpponent);
 
-    private static float[] Encode(BoardState board, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0)
+    private static float[] Encode(BoardPosition position, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0)
     {
         var features = new float[FeatureEncoder.FeatureSize];
-        FeatureEncoder.Encode(board, playerToMove, offPlayer, offOpponent, features);
+        FeatureEncoder.Encode(position, playerToMove, offPlayer, offOpponent, features);
         return features;
     }
 
@@ -118,8 +118,8 @@ public sealed class FeatureEncoderTests
     [Fact]
     public void PlayerToMove_FlipsExactlyOneFeature()
     {
-        var onRoll = Encode(BoardState.Standard(), playerToMove: true);
-        var notOnRoll = Encode(BoardState.Standard(), playerToMove: false);
+        var onRoll = Encode(BoardPosition.Standard, playerToMove: true);
+        var notOnRoll = Encode(BoardPosition.Standard, playerToMove: false);
 
         Assert.Equal(1f, onRoll[PlayerToMoveIndex]);
         Assert.Equal(0f, notOnRoll[PlayerToMoveIndex]);
@@ -150,7 +150,7 @@ public sealed class FeatureEncoderTests
     [Fact]
     public void Race_ContactPosition_IsZero()
     {
-        Assert.Equal(0f, Encode(BoardState.Standard())[RaceIndex]);
+        Assert.Equal(0f, Encode(BoardPosition.Standard)[RaceIndex]);
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class FeatureEncoderTests
         // position vacuously true. The encoder must pin the producer's answer.
         var mop = EmptyMop();
         mop[25] = 1;
-        var board = BoardState.FromMop(mop);
+        var board = new BoardState(new BoardPosition(mop));
 
         Assert.True(board.IsRace); // documents the divergence this guard exists for
         Assert.Equal(0f, Encode(mop)[RaceIndex]);
@@ -192,10 +192,9 @@ public sealed class FeatureEncoderTests
     [Fact]
     public void Encode_WrongDestinationLength_Throws()
     {
-        var board = BoardState.Standard();
         var tooShort = new float[FeatureEncoder.FeatureSize - 1];
 
         Assert.Throws<ArgumentException>(
-            () => FeatureEncoder.Encode(board, playerToMove: true, 0, 0, tooShort));
+            () => FeatureEncoder.Encode(BoardPosition.Standard, playerToMove: true, 0, 0, tooShort));
     }
 }

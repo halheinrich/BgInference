@@ -59,15 +59,14 @@ internal static class FeatureEncoder
     /// <summary>
     /// Encode a position into <paramref name="destination"/>.
     /// </summary>
-    /// <param name="board">
-    /// The position, in <see cref="BoardState"/>'s on-roll-relative frame
-    /// (positive = the perspective player's checkers; <c>Points[25]</c> their
-    /// bar, <c>Points[0]</c> the opponent's bar, stored ≤ 0). The perspective
+    /// <param name="position">
+    /// The position, in the frame of the perspective player, the player the
+    /// frame belongs to (see <see cref="BoardPosition"/>). The perspective
     /// player is the "player" of every player/opponent feature pair.
     /// </param>
     /// <param name="playerToMove">
     /// Whether the perspective player is on roll (feature 298). Evaluating a
-    /// board in its natural on-roll frame passes <see langword="true"/>; the
+    /// position in its natural on-roll frame passes <see langword="true"/>; the
     /// producer's training-record path also encodes positions from the
     /// non-mover's perspective, which is why the flag exists and why the
     /// parity fixture covers both values.
@@ -84,7 +83,7 @@ internal static class FeatureEncoder
     /// <param name="destination">Receives the features; length must be exactly <see cref="FeatureSize"/>.</param>
     /// <exception cref="ArgumentException"><paramref name="destination"/> has the wrong length.</exception>
     internal static void Encode(
-        BoardState board,
+        BoardPosition position,
         bool playerToMove,
         int offPlayer,
         int offOpponent,
@@ -103,20 +102,20 @@ internal static class FeatureEncoder
         // Player points (24 × 6 = 144)
         for (int p = 1; p <= NumPoints; p++)
         {
-            EncodePoint(Math.Max(0, board.Points[p]), destination.Slice(idx, UnitsPerPoint));
+            EncodePoint(Math.Max(0, position[p]), destination.Slice(idx, UnitsPerPoint));
             idx += UnitsPerPoint;
         }
 
         // Opponent points (24 × 6 = 144)
         for (int p = 1; p <= NumPoints; p++)
         {
-            EncodePoint(Math.Max(0, -board.Points[p]), destination.Slice(idx, UnitsPerPoint));
+            EncodePoint(Math.Max(0, -position[p]), destination.Slice(idx, UnitsPerPoint));
             idx += UnitsPerPoint;
         }
 
         // Bar (3 + 3)
-        int barPlayer = board.Points[25];
-        int barOpponent = -board.Points[0];
+        int barPlayer = position[25];
+        int barOpponent = -position[0];
         EncodeBar(barPlayer, destination.Slice(idx, BarFeatures));
         idx += BarFeatures;
         EncodeBar(barOpponent, destination.Slice(idx, BarFeatures));
@@ -131,6 +130,10 @@ internal static class FeatureEncoder
         // Global features (5)
         destination[idx++] = playerToMove ? 1f : 0f;
 
+        // The pip rule and the race test are BoardState's (PipCount,
+        // OpponentPipCount, IsRace), and BoardPosition does not publish
+        // them, so they are read from a board built on the position.
+        var board = new BoardState(position);
         int playerPips = board.PipCount;
         int opponentPips = board.OpponentPipCount;
         int totalPips = playerPips + opponentPips;
@@ -146,7 +149,6 @@ internal static class FeatureEncoder
 
         // Each side's checkers on the board and bar: the position's own
         // counts, read back from what it has borne off.
-        BoardPosition position = board.ToPosition();
         int playerCheckers = BoardPosition.CheckersPerSide - position.OnRollBorneOffCount;
         int opponentCheckers = BoardPosition.CheckersPerSide - position.OpponentBorneOffCount;
         destination[idx++] = (float)(playerCheckers / (double)BoardPosition.CheckersPerSide);
