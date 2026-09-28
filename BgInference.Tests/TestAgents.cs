@@ -42,6 +42,18 @@ internal static class TestEvaluators
     }
 
     /// <summary>
+    /// Scores each position by a caller-supplied rule — for scenarios that
+    /// single out one position by value.
+    /// </summary>
+    internal sealed class Scripted(Func<BoardPosition, PositionEvaluation> evaluate) : IPositionEvaluator
+    {
+        public PositionEvaluation Evaluate(BoardPosition position) => evaluate(position);
+
+        public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardPosition> positions) =>
+            positions.Select(Evaluate).ToArray();
+    }
+
+    /// <summary>
     /// Records every position it is asked about, in order, and returns
     /// <paramref name="value"/> for each — for pinning <em>which</em>
     /// positions a caller evaluates.

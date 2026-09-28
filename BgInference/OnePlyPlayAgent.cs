@@ -10,13 +10,19 @@ using BgMoveGen;
 ///
 /// <para>
 /// This mirrors the producer's <c>engine/game.py::select_play</c> exactly.
-/// Each candidate is applied to a copy of the board via
-/// <see cref="BoardState.ApplyPlay"/>, which flips the successor into the
-/// <em>opponent's</em> on-roll frame — so the evaluator scores each successor
-/// from the opponent's perspective, and the folded equity is <em>negated</em>
-/// before comparison: the best play minimizes the opponent's equity. Ties
-/// break to the first maximum, matching <c>argmax</c>, so play choice is
+/// The candidates are the move generator's successors
+/// (<see cref="MoveGenerator.GenerateSuccessors"/>): each legal play with the
+/// position it leaves the next mover, in the <em>opponent's</em> frame — so
+/// the evaluator scores each successor from the opponent's perspective, and
+/// the folded equity is <em>negated</em> before comparison: the best play
+/// minimizes the opponent's equity. Ties break to the first maximum, in the
+/// generator's candidate order, matching <c>argmax</c>, so play choice is
 /// deterministic for a deterministic evaluator.
+/// </para>
+///
+/// <para>
+/// The chosen play is taken from the same successor as the position it was
+/// scored on, so a play cannot be returned for another play's position.
 /// </para>
 ///
 /// <para>
@@ -66,19 +72,15 @@ public sealed class OnePlyPlayAgent : IPlayAgent
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var plays = MoveGenerator.GeneratePlays(state.Board, die1, die2);
-        if (plays.Count == 1)
-            return ValueTask.FromResult(plays[0]); // dance or forced — nothing to decide
+        var successors = MoveGenerator.GenerateSuccessors(state.Board, die1, die2);
+        if (successors.Count == 1)
+            return ValueTask.FromResult(successors[0].Play); // dance or forced — nothing to decide
 
-        var successors = new List<BoardPosition>(plays.Count);
-        foreach (var play in plays)
-        {
-            var successor = state.Board.Copy();
-            successor.ApplyPlay(play); // applies the moves AND flips to the opponent's frame
-            successors.Add(successor.ToPosition());
-        }
+        var positions = new BoardPosition[successors.Count];
+        for (int i = 0; i < successors.Count; i++)
+            positions[i] = successors[i].Position;
 
-        var evaluations = _evaluator.EvaluateBatch(successors);
+        var evaluations = _evaluator.EvaluateBatch(positions);
 
         int bestIndex = 0;
         float bestEquity = float.NegativeInfinity;
@@ -94,6 +96,6 @@ public sealed class OnePlyPlayAgent : IPlayAgent
             }
         }
 
-        return ValueTask.FromResult(plays[bestIndex]);
+        return ValueTask.FromResult(successors[bestIndex].Play);
     }
 }

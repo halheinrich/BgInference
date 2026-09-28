@@ -21,10 +21,11 @@ https://github.com/halheinrich/BgInference — branch `main`.
 
 - **BgDataTypes_Lib** — `BoardPosition` (the position value the evaluator
   takes, each side's borne-off count, and `CheckersPerSide`), `BoardState`
-  (the on-roll-relative board and its apply/flip primitives, and the pip and
-  race rules the encoder reads), `Play`/`Move`, `CubeAction`.
-- **BgMoveGen** — `MoveGenerator.GeneratePlays` (candidate plays for one-ply
-  selection).
+  (the board a `GameState` holds, read through `ToPosition()`, and the pip
+  and race rules the encoder reads), `Play`/`Move`, `CubeAction`.
+- **BgMoveGen** — `MoveGenerator.GenerateSuccessors` (each legal play with
+  the position it leaves the next mover, for one-ply selection). The tests
+  also use `GeneratePlays` and `IsLegalPlay`.
 - **BgGame_Lib** — `IPlayAgent`/`ICubeAgent` contracts, `GameState`/`MatchState`,
   `MatchRunner` + `SeededDiceSource` (integration proof).
 - **BgRLEngine** (cross-language, test-time only) — producer of the ONNX export
@@ -124,15 +125,17 @@ over its successors as positions; the cube agent passes
 changed by the evaluator, so neither needs saying.
 
 **Agents are thin policies over `IPositionEvaluator`.** `OnePlyPlayAgent`
-mirrors the producer's `select_play`: copy → `ApplyPlay` (moves **and** flip
-into the opponent's frame) → batched evaluation → **negate** the folded equity
-→ strict-improvement argmax (first-max tie-break). Single-legal-play turns
-(dance/forced) return without consulting the evaluator; terminal successors
-are evaluated like any other, same as `select_play`. `ThresholdCubeAgent` is
-the deliberately crude v1 cube (see its XML docs for what it ignores and what
-replaces it). Scratch strategy is copy-and-`ApplyPlay`, not apply/undo — right
-for one ply × ~20 candidates; apply/undo becomes relevant only with deep
-search.
+mirrors the producer's `select_play`: the move generator's successors
+(`MoveGenerator.GenerateSuccessors`, each play with the position it leaves
+the opponent, in the opponent's frame) → batched evaluation of the positions
+→ **negate** the folded equity → strict-improvement argmax (first-max
+tie-break, in the generator's candidate order) → the play of the winning
+successor. The play and the position it was scored on come from the same
+successor, so they cannot be paired wrongly; the agent builds no successor of
+its own and copies no board. Single-legal-play turns (dance/forced) return
+without consulting the evaluator; terminal successors are evaluated like any
+other, same as `select_play`. `ThresholdCubeAgent` is the deliberately crude
+v1 cube (see its XML docs for what it ignores and what replaces it).
 
 **Equity fold.** `EquityWeights.Money` = `(1, 2, 3, −1, −2, −3)`, mirroring
 the producer's `compute_equity` default: the six outputs are treated as
@@ -196,14 +199,21 @@ export whose encoding version matches; nothing here is parity-model-specific.
 ## Pitfalls
 
 - **Two perspective boundaries live in this library; each has a named
-  pinning test.** (1) Successor evaluation: `ApplyPlay` flips the board, so
-  `OnePlyPlayAgent` negates folded equity —
+  pinning test.** (1) Successor evaluation: a successor is in the next
+  mover's frame (`MoveGenerator.GenerateSuccessors`), so `OnePlyPlayAgent`
+  negates folded equity —
   `NegationPin_ChoosesTheHit_WhereUnNegatedArgmaxProvablyWouldNot`.
   (2) The encoder's `player_to_move` flag: the public evaluator always encodes
   `true`; the flag exists for the producer's training-record encodings and is
   exercised by the fixture's `player_to_move: false` cases — parity gate +
   `PlayerToMove_FlipsExactlyOneFeature`. A sign change that dodges its pin is
   a bug in the pin, not a green light.
+- **A play travels with its position.** `OnePlyPlayAgent` returns the play
+  of the successor it scored best. Do not rebuild the pairing by zipping
+  `GeneratePlays` with a list of positions, or by flipping and applying plays
+  here: the successor rule and the flip are BgMoveGen's and BgDataTypes_Lib's.
+  `ChosenPlay_ReachesThePositionScoredBest_ForEverySuccessor` pins it by
+  applying the returned play to the live board for every candidate.
   **The cube-response boundary was eliminated**, not pinned: it was a third
   boundary while `MatchRunner` handed the responder a state in the *offerer's*
   frame (so `ChooseResponseAsync` negated). The perspective-unification work
@@ -254,6 +264,5 @@ export whose encoding version matches; nothing here is parity-model-specific.
 - **MET/Janowski cube agent** — the recorded replacement for
   `ThresholdCubeAgent`; `EquityWeights` already parameterizes the fold it
   will need.
-- **Deeper search (n-ply / rollouts)** — if it comes, that is when the
-  apply/undo hot-path pattern (and an encoder path that avoids successor
-  copies) becomes worth adopting.
+- **Deeper search (n-ply / rollouts)** — if it comes, that is when an
+  apply/undo hot path becomes worth adopting.

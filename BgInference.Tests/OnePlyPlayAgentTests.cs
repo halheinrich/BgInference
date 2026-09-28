@@ -30,8 +30,8 @@ public sealed class OnePlyPlayAgentTests
     /// The perspective-negation pin.
     ///
     /// <para>
-    /// Applying a play flips the successor into the opponent's on-roll frame,
-    /// so the evaluator scores it for the opponent; the agent must negate.
+    /// Each successor is in the opponent's on-roll frame, so the evaluator
+    /// scores it for the opponent; the agent must negate.
     /// This scenario makes a sign error provably wrong: under the pip-lead
     /// stub, every play spends exactly 3 of the mover's pips (dice 2-1, no
     /// bear-off in range), and hitting the lone blot on point 18 additionally
@@ -51,12 +51,12 @@ public sealed class OnePlyPlayAgentTests
         mop[18] = -1; // opponent's lone blot: hittable 20/18* with the 2
         mop[1] = -2;  // inert opponent anchor
         var state = AtPosition(mop);
-        var plays = MoveGenerator.GeneratePlays(state.Board, die1: 2, die2: 1);
+        var successors = MoveGenerator.GenerateSuccessors(state.Board, die1: 2, die2: 1);
 
         // Scenario validity: both hitting and non-hitting plays must exist,
         // or the pin is vacuous.
-        Assert.Contains(plays, Hits);
-        Assert.Contains(plays, p => !Hits(p));
+        Assert.Contains(successors, s => Hits(s.Play));
+        Assert.Contains(successors, s => !Hits(s.Play));
 
         var agent = new OnePlyPlayAgent(new TestEvaluators.PipLead());
         var chosen = await agent.ChoosePlayAsync(state, die1: 2, die2: 1);
@@ -66,21 +66,19 @@ public sealed class OnePlyPlayAgentTests
 
         // And pin the trap itself: the naive un-negated argmax over the same
         // successors lands on a non-hitting play.
-        var naive = plays[ArgmaxUnNegated(state.Board, plays)];
+        var naive = successors[ArgmaxUnNegated(successors)].Play;
         Assert.False(Hits(naive),
             "Scenario no longer discriminates: the un-negated pick also hits.");
     }
 
-    private static int ArgmaxUnNegated(BoardState board, List<Play> plays)
+    private static int ArgmaxUnNegated(IReadOnlyList<Successor> successors)
     {
         var stub = new TestEvaluators.PipLead();
         int bestIndex = 0;
         float best = float.NegativeInfinity;
-        for (int i = 0; i < plays.Count; i++)
+        for (int i = 0; i < successors.Count; i++)
         {
-            var successor = board.Copy();
-            successor.ApplyPlay(plays[i]);
-            float equity = stub.Evaluate(successor.ToPosition()).Equity(EquityWeights.Money); // no negation
+            float equity = stub.Evaluate(successors[i].Position).Equity(EquityWeights.Money); // no negation
             if (equity > best)
             {
                 best = equity;
@@ -88,6 +86,40 @@ public sealed class OnePlyPlayAgentTests
             }
         }
         return bestIndex;
+    }
+
+    /// <summary>
+    /// The pairing pin: the play returned is the play that reaches the
+    /// position scored best, never another candidate's.
+    ///
+    /// <para>
+    /// For every successor in turn, a scripted evaluator makes that one
+    /// position the opponent's worst (so the mover's best, after negation).
+    /// The agent's play is then applied to the live board by the one play
+    /// rule (<see cref="BoardState.ApplyPlay"/>), and it must reach exactly
+    /// the singled-out position. Walking every index rules out an agent that
+    /// returns a fixed candidate, or one beside the one it scored.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ChosenPlay_ReachesThePositionScoredBest_ForEverySuccessor()
+    {
+        var state = GameState.NewGame(MatchState.NewMatch(0));
+        var successors = MoveGenerator.GenerateSuccessors(state.Board, die1: 3, die2: 1);
+        Assert.True(successors.Count > 2, "The scenario needs a choice among several plays.");
+
+        for (int k = 0; k < successors.Count; k++)
+        {
+            var target = successors[k].Position;
+            var agent = new OnePlyPlayAgent(new TestEvaluators.Scripted(position =>
+                new PositionEvaluation(position == target ? -1f : 0f, 0f, 0f, 0f, 0f, 0f)));
+
+            var chosen = await agent.ChoosePlayAsync(state, die1: 3, die2: 1);
+
+            var reached = state.Board.Copy();
+            reached.ApplyPlay(chosen);
+            Assert.Equal(target, reached.ToPosition());
+        }
     }
 
     [Fact]
