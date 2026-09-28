@@ -90,15 +90,22 @@ counts). Every stored value is computed in `double` and narrowed to `float`
 (numpy's compute-float64/store-float32). Pip counts reuse
 `BoardState.PipCount`/`OpponentPipCount`; the race flag reuses
 `BoardState.IsRace` behind an explicit bar-occupancy guard (see Pitfalls).
+Each side's checker count is the position's, read back from
+`BoardPosition.OnRollBorneOffCount`/`OpponentBorneOffCount`. The divisor and
+the all-off threshold are the producer's `CHECKERS_PER_PLAYER`, the number of
+checkers a side has, so the encoder reads `BoardPosition.CheckersPerSide`,
+that number's one statement, rather than naming its own; the overflow scale,
+a choice of the encoding, stays the encoder's constant.
 Board mapping: producer `points[i]` = `Points[i+1]`, bars = `Points[25]` /
-`−Points[0]`, borne-off counts derived (see Pitfalls), `player_to_move` is an
-encoder parameter, not a board property.
+`−Points[0]`; the borne-off counts and `player_to_move` are encoder
+parameters (see Pitfalls).
 
 **OnnxEvaluator.** `Load` is a fail-fast handshake: not-loadable ONNX,
 missing/malformed `bgrl.*` keys, encoding-version mismatch, structural-key
 mismatch, or graph-shape drift each throw a named `ModelContractException`
-before any evaluation is possible. Evaluation derives off counts, encodes
-`playerToMove: true` (the public path is always the on-roll perspective), and
+before any evaluation is possible. Evaluation takes each side's borne-off
+count from the position (`BoardPosition.OnRollBorneOffCount` /
+`OpponentBorneOffCount`), encodes `playerToMove: true` (the public path is always the on-roll perspective), and
 runs one ORT `Run` per batch. Sessions are thread-safe for inference;
 `Dispose` releases the native session. `ModelMetadata` exposes the validated
 `bgrl.*` map for diagnostics and future routing (`bgrl.model_role`).
@@ -192,7 +199,8 @@ export whose encoding version matches; nothing here is parity-model-specific.
   `Response_ReadsResponderFrameEquity_BothDirections`. That two-direction pin
   is what guards against a stray negation being reintroduced.
 - **Bit-exactness is arithmetic-shape-sensitive.** Compute in `double`, narrow
-  to `float`, per slot. "Simplifying" `(float)(count / 15.0)` to float
+  to `float`, per slot. "Simplifying"
+  `(float)(count / (double)BoardPosition.CheckersPerSide)` to float
   division, or reordering the pip-ratio arithmetic, can break the encoding pin
   without being wrong-looking. The gate reads its tolerances from the fixture
   header — never loosen them locally to get green.
@@ -201,12 +209,15 @@ export whose encoding version matches; nothing here is parity-model-specific.
   has no checkers and `IsRace`'s positional scan says vacuously true. The
   encoder's explicit bar guard pins the producer's semantics
   (`Race_PlayerOnBar_IsZero_EvenWhenIsRaceIsVacuouslyTrue`).
-- **Borne-off counts are derived, and only on the public path.**
-  `BoardState` stores board + bar checkers only; `OnnxEvaluator` derives
-  `15 − in-play` per side and fails loud if negative (>15 checkers a side).
-  The parity tests deliberately bypass the derivation and feed the fixture's
-  raw off counts through the internal encoder, so degenerate fixture cases pin
-  the encoding without trusting the derivation.
+- **The borne-off counts are encoder inputs; the position's are supplied
+  only on the public path.** This library derives no count of its own:
+  `OnnxEvaluator` passes the position's (`BoardPosition.OnRollBorneOffCount`
+  / `OpponentBorneOffCount`, halheinrich/backgammon#295). The encoder keeps
+  them as parameters because the producer's board carries its off counts
+  independently of its points, and the parity tests feed the fixture's raw
+  values through the internal encoder. Do not have the encoder read them
+  from the position: the fixture's `bar-one-each` case has 14 on-roll
+  checkers in play and an off count of 0, so the gate goes red for it.
 - **Encoding-version changes are a paired dance.** The producer bumps
   `bgrl.encoding_version` and regenerates both fixtures in one commit; this
   library then updates `FeatureEncoder.EncodingVersion`, adapts the encoder,

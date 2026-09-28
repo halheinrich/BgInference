@@ -202,7 +202,6 @@ public sealed class OnnxEvaluator : IPositionEvaluator, IDisposable
     }
 
     /// <inheritdoc />
-    /// <exception cref="ArgumentException">A board's derived borne-off count is negative (more than 15 checkers a side).</exception>
     public PositionEvaluation[] EvaluateBatch(IReadOnlyList<BoardState> boards)
     {
         ArgumentNullException.ThrowIfNull(boards);
@@ -214,12 +213,12 @@ public sealed class OnnxEvaluator : IPositionEvaluator, IDisposable
         for (int i = 0; i < boards.Count; i++)
         {
             var board = boards[i] ?? throw new ArgumentException($"boards[{i}] is null.", nameof(boards));
-            (int offPlayer, int offOpponent) = DeriveOffCounts(board, i);
+            var position = board.ToPosition();
             FeatureEncoder.Encode(
                 board,
                 playerToMove: true,
-                offPlayer,
-                offOpponent,
+                position.OnRollBorneOffCount,
+                position.OpponentBorneOffCount,
                 features.AsSpan(i * FeatureEncoder.FeatureSize, FeatureEncoder.FeatureSize));
         }
 
@@ -252,38 +251,6 @@ public sealed class OnnxEvaluator : IPositionEvaluator, IDisposable
         }
 
         return evaluations;
-    }
-
-    /// <summary>
-    /// Borne-off counts, derived: <see cref="BoardState"/> stores board and
-    /// bar checkers only, so each side's offs are 15 minus what remains in
-    /// play. A negative derivation means more than 15 checkers a side — not a
-    /// backgammon position, and an evaluation of it would be silently
-    /// meaningless, so it fails loud instead.
-    /// </summary>
-    private static (int OffPlayer, int OffOpponent) DeriveOffCounts(BoardState board, int index)
-    {
-        int player = 0;
-        int opponent = 0;
-        for (int p = 1; p <= 24; p++)
-        {
-            int n = board.Points[p];
-            if (n > 0) player += n;
-            else opponent -= n;
-        }
-        player += board.Points[25];
-        opponent -= board.Points[0];
-
-        int offPlayer = FeatureEncoder.CheckersPerPlayer - player;
-        int offOpponent = FeatureEncoder.CheckersPerPlayer - opponent;
-        if (offPlayer < 0 || offOpponent < 0)
-        {
-            throw new ArgumentException(
-                $"boards[{index}] has more than {FeatureEncoder.CheckersPerPlayer} checkers a side " +
-                $"(on-roll: {player}, opponent: {opponent}) — not an evaluable backgammon position.");
-        }
-
-        return (offPlayer, offOpponent);
     }
 
     /// <inheritdoc />

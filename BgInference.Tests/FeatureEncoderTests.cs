@@ -97,7 +97,8 @@ public sealed class FeatureEncoderTests
     [Theory]
     [InlineData(0, 0f, 0f)]
     [InlineData(7, 7f / 15f, 0f)]
-    [InlineData(15, 1f, 1f)]
+    [InlineData(BoardPosition.CheckersPerSide - 1, 14f / 15f, 0f)] // one short of all off
+    [InlineData(BoardPosition.CheckersPerSide, 1f, 1f)]            // every checker off
     public void BorneOff_FractionAndAllOffFlag(int off, float fraction, float allOff)
     {
         var features = Encode(EmptyMop(), offPlayer: off, offOpponent: 0);
@@ -108,7 +109,7 @@ public sealed class FeatureEncoderTests
     [Fact]
     public void OpponentBorneOff_EncodesInItsOwnSlot()
     {
-        var features = Encode(EmptyMop(), offPlayer: 0, offOpponent: 15);
+        var features = Encode(EmptyMop(), offPlayer: 0, offOpponent: BoardPosition.CheckersPerSide);
 
         Assert.Equal(new[] { 0f, 0f }, features[OffPlayerBase..(OffPlayerBase + 2)]);
         Assert.Equal(new[] { 1f, 1f }, features[OffOpponentBase..(OffOpponentBase + 2)]);

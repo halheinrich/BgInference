@@ -25,6 +25,16 @@ using BgDataTypes_Lib;
 /// and then narrowed to <see langword="float"/>, matching numpy's
 /// compute-in-float64, store-in-float32 behavior. Do not reorder arithmetic.
 /// </para>
+///
+/// <para>
+/// The divisor of the borne-off fraction and the checker counts, and the
+/// all-off threshold, is the producer's <c>CHECKERS_PER_PLAYER</c>: the
+/// number of checkers a side has, which here is
+/// <see cref="BoardPosition.CheckersPerSide"/>, the one statement of that
+/// number. It is a fact of the game rather than a scale of this encoding
+/// (unlike the overflow scale), so the encoder reads it rather than naming
+/// its own.
+/// </para>
 /// </summary>
 internal static class FeatureEncoder
 {
@@ -38,9 +48,6 @@ internal static class FeatureEncoder
 
     /// <summary>Feature vector length — the model's input width.</summary>
     internal const int FeatureSize = 303;
-
-    /// <summary>Checkers per player in a legal position; normalization divisor.</summary>
-    internal const int CheckersPerPlayer = 15;
 
     private const int NumPoints = 24;
     private const int UnitsPerPoint = 6;
@@ -66,10 +73,12 @@ internal static class FeatureEncoder
     /// parity fixture covers both values.
     /// </param>
     /// <param name="offPlayer">
-    /// Perspective player's borne-off count. Explicit because
-    /// <see cref="BoardState"/> does not store offs; public callers derive
-    /// <c>15 − (board + bar)</c>, while parity tests supply the fixture's raw
-    /// value so degenerate cases are pinned without trusting the derivation.
+    /// Perspective player's borne-off count. An input of its own, as in the
+    /// producer's <c>encode_board</c>, whose board carries its off counts
+    /// independently of its points: the public path supplies the position's
+    /// count (<see cref="BoardPosition.OnRollBorneOffCount"/>), and the parity
+    /// tests supply the fixture's raw value, which for a degenerate case need
+    /// not agree with the position's.
     /// </param>
     /// <param name="offOpponent">Opponent's borne-off count; same contract as <paramref name="offPlayer"/>.</param>
     /// <param name="destination">Receives the features; length must be exactly <see cref="FeatureSize"/>.</param>
@@ -135,8 +144,13 @@ internal static class FeatureEncoder
         bool isRace = barPlayer <= 0 && barOpponent <= 0 && board.IsRace;
         destination[idx++] = isRace ? 1f : 0f;
 
-        destination[idx++] = (float)(PlayerCheckerCount(board) / (double)CheckersPerPlayer);
-        destination[idx++] = (float)(OpponentCheckerCount(board) / (double)CheckersPerPlayer);
+        // Each side's checkers on the board and bar: the position's own
+        // counts, read back from what it has borne off.
+        BoardPosition position = board.ToPosition();
+        int playerCheckers = BoardPosition.CheckersPerSide - position.OnRollBorneOffCount;
+        int opponentCheckers = BoardPosition.CheckersPerSide - position.OpponentBorneOffCount;
+        destination[idx++] = (float)(playerCheckers / (double)BoardPosition.CheckersPerSide);
+        destination[idx++] = (float)(opponentCheckers / (double)BoardPosition.CheckersPerSide);
 
         Debug.Assert(idx == FeatureSize, "Feature layout drifted from FeatureSize.");
     }
@@ -161,28 +175,13 @@ internal static class FeatureEncoder
             slot[i] = 1f;
     }
 
-    /// <summary>Borne-off count as (fraction of 15, all-off flag).</summary>
+    /// <summary>
+    /// Borne-off count as (fraction of <see cref="BoardPosition.CheckersPerSide"/>,
+    /// all-off flag).
+    /// </summary>
     private static void EncodeBorneOff(int count, Span<float> slot)
     {
-        slot[0] = (float)(count / (double)CheckersPerPlayer);
-        slot[1] = count >= CheckersPerPlayer ? 1f : 0f;
-    }
-
-    /// <summary>Perspective player's checkers in play: on the board plus on the bar.</summary>
-    private static int PlayerCheckerCount(BoardState board)
-    {
-        int onBoard = 0;
-        for (int p = 1; p <= NumPoints; p++)
-            onBoard += Math.Max(0, board.Points[p]);
-        return onBoard + board.Points[25];
-    }
-
-    /// <summary>Opponent's checkers in play: on the board plus on the bar.</summary>
-    private static int OpponentCheckerCount(BoardState board)
-    {
-        int onBoard = 0;
-        for (int p = 1; p <= NumPoints; p++)
-            onBoard += Math.Max(0, -board.Points[p]);
-        return onBoard - board.Points[0];
+        slot[0] = (float)(count / (double)BoardPosition.CheckersPerSide);
+        slot[1] = count >= BoardPosition.CheckersPerSide ? 1f : 0f;
     }
 }
