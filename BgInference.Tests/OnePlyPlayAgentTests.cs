@@ -18,9 +18,9 @@ public sealed class OnePlyPlayAgentTests
 
     private static bool Hits(Play play)
     {
-        for (int i = 0; i < play.Count; i++)
+        foreach (var move in play)
         {
-            if (play[i].ToPt < 0)
+            if (move.ToPt < 0)
                 return true;
         }
         return false;
@@ -118,31 +118,32 @@ public sealed class OnePlyPlayAgentTests
             new TestEvaluators.Constant(new PositionEvaluation(0.5f, 0f, 0f, 0.5f, 0f, 0f)));
         var chosen = await agent.ChoosePlayAsync(state, die1: 3, die2: 1);
 
-        Assert.Equal(plays[0], chosen);
+        Assert.True(state.Board.IsSamePlay(plays[0], chosen),
+            $"Expected the first candidate {plays[0].ToNotation()}, got {chosen.ToNotation()}.");
     }
 
     [Fact]
-    public async Task ChosenPlay_IsAlwaysOneOfTheLegalPlays()
+    public async Task ChosenPlay_IsAlwaysLegal()
     {
         var state = GameState.NewGame(MatchState.NewMatch(0));
-        var plays = MoveGenerator.GeneratePlays(state.Board, die1: 6, die2: 5);
 
         var agent = new OnePlyPlayAgent(new TestEvaluators.PipLead());
         var chosen = await agent.ChoosePlayAsync(state, die1: 6, die2: 5);
 
-        Assert.Contains(chosen, plays);
+        Assert.True(MoveGenerator.IsLegalPlay(state.Board, chosen, die1: 6, die2: 5),
+            $"{chosen.ToNotation()} is not a legal 6-5 from the start.");
     }
 
     [Fact]
     public async Task ChoosePlay_DoesNotMutateTheLiveBoard()
     {
         var state = GameState.NewGame(MatchState.NewMatch(0));
-        var before = state.Board.ToMop().ToArray();
+        var before = state.Board.ToPosition();
 
         var agent = new OnePlyPlayAgent(new TestEvaluators.PipLead());
         await agent.ChoosePlayAsync(state, die1: 3, die2: 1);
 
-        Assert.Equal(before, state.Board.ToMop().ToArray());
+        Assert.Equal(before, state.Board.ToPosition());
     }
 
     [Fact]

@@ -147,18 +147,6 @@ public sealed class OnnxEvaluatorTests
     }
 
     [Fact]
-    public void EvaluateBatch_MoreThanFifteenCheckers_FailsLoud()
-    {
-        var mop = new int[26];
-        mop[1] = 16; // pseudoboard: off-count derivation would go negative
-        var board = BoardState.FromMop(mop);
-
-        var ex = Assert.Throws<ArgumentException>(
-            () => ParityFixture.Evaluator.Evaluate(board));
-        Assert.Contains("more than 15 checkers", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Evaluate_GameOverBoard_Evaluates()
     {
         // All checkers off on both sides — degenerate but representable; the

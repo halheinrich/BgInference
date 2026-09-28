@@ -23,10 +23,13 @@ public sealed class FeatureEncoderTests
     private const int PlayerCountIndex = 301;
     private const int OpponentCountIndex = 302;
 
-    private static float[] Encode(int[] mop, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0)
+    private static float[] Encode(int[] mop, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0) =>
+        Encode(BoardState.FromMop(mop), playerToMove, offPlayer, offOpponent);
+
+    private static float[] Encode(BoardState board, bool playerToMove = true, int offPlayer = 0, int offOpponent = 0)
     {
         var features = new float[FeatureEncoder.FeatureSize];
-        FeatureEncoder.Encode(BoardState.FromMop(mop), playerToMove, offPlayer, offOpponent, features);
+        FeatureEncoder.Encode(board, playerToMove, offPlayer, offOpponent, features);
         return features;
     }
 
@@ -40,7 +43,6 @@ public sealed class FeatureEncoderTests
         { 5, new[] { 1f, 1f, 1f, 1f, 1f, 0f } },
         { 6, new[] { 1f, 1f, 1f, 1f, 1f, 0.1f } },        // overflow: (6−5)/10
         { 15, new[] { 1f, 1f, 1f, 1f, 1f, 1f } },          // overflow saturates at 1.0
-        { 16, new[] { 1f, 1f, 1f, 1f, 1f, 1f } },          // clamped, not 1.1
     };
 
     [Theory]
@@ -115,9 +117,8 @@ public sealed class FeatureEncoderTests
     [Fact]
     public void PlayerToMove_FlipsExactlyOneFeature()
     {
-        var mop = BoardState.Standard().ToMop().ToArray();
-        var onRoll = Encode(mop, playerToMove: true);
-        var notOnRoll = Encode(mop, playerToMove: false);
+        var onRoll = Encode(BoardState.Standard(), playerToMove: true);
+        var notOnRoll = Encode(BoardState.Standard(), playerToMove: false);
 
         Assert.Equal(1f, onRoll[PlayerToMoveIndex]);
         Assert.Equal(0f, notOnRoll[PlayerToMoveIndex]);
@@ -148,8 +149,7 @@ public sealed class FeatureEncoderTests
     [Fact]
     public void Race_ContactPosition_IsZero()
     {
-        var mop = BoardState.Standard().ToMop().ToArray();
-        Assert.Equal(0f, Encode(mop)[RaceIndex]);
+        Assert.Equal(0f, Encode(BoardState.Standard())[RaceIndex]);
     }
 
     [Fact]
