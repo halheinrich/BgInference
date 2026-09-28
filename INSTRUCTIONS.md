@@ -225,10 +225,13 @@ export whose encoding version matches; nothing here is parity-model-specific.
   `Response_ReadsResponderFrameEquity_BothDirections`. That two-direction pin
   is what guards against a stray negation being reintroduced.
 - **Bit-exactness is arithmetic-shape-sensitive.** Compute in `double`, narrow
-  to `float`, per slot. "Simplifying"
-  `(float)(count / (double)BoardPosition.CheckersPerSide)` to float
-  division, or reordering the pip-ratio arithmetic, can break the encoding pin
-  without being wrong-looking. The gate reads its tolerances from the fixture
+  to `float`, per slot, and do not reorder the arithmetic. Rewriting
+  `(float)(count / (double)BoardPosition.CheckersPerSide)` as a multiplication
+  by a `float` reciprocal, `count * (1f / BoardPosition.CheckersPerSide)`,
+  looks harmless and breaks the encoding pin for six of the sixteen counts
+  (measured by mutation, 2026-09-28). Plain `float` division is not an
+  example: for one division of small integers it rounds as the `double`
+  form does, so it passes. The gate reads its tolerances from the fixture
   header — never loosen them locally to get green.
 - **`BoardState.IsRace` is not the producer's `is_race()`.** The producer
   returns false whenever *either* bar is occupied — even when the other side
