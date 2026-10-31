@@ -31,7 +31,8 @@ using BgMoveGen;
 /// queries an agent on a dance, but the short-circuit keeps this agent
 /// correct for any driver. Terminal successors are evaluated like any other
 /// (no certain-win short-circuit), again mirroring <c>select_play</c>; a
-/// shortcut is a recorded candidate improvement, not v1 behavior.
+/// shortcut is a candidate improvement (halheinrich/backgammon#482), not v1
+/// behavior.
 /// </para>
 /// </summary>
 public sealed class OnePlyPlayAgent : IPlayAgent
@@ -51,7 +52,8 @@ public sealed class OnePlyPlayAgent : IPlayAgent
 
     /// <summary>
     /// Create a one-ply agent folding evaluations with explicit weights
-    /// (score-dependent weight selection belongs to a future MET arc).
+    /// (score-dependent weight selection belongs to a future MET arc,
+    /// halheinrich/backgammon#483).
     /// </summary>
     /// <param name="evaluator">Scores candidate successor positions.</param>
     /// <param name="weights">The equity fold applied to each successor evaluation.</param>

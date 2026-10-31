@@ -3,14 +3,14 @@ namespace BgInference.Tests;
 using System.Security.Cryptography;
 
 /// <summary>
-/// The cross-language parity gate, in contract order. Every step fails loud
+/// The cross-language parity gate. Each test's number is its step in the
+/// contract, not its place in this file or in a run. Every step fails loud
 /// and none may be skipped: (1) fixture files exist, (2) the model's sha256
 /// matches the vectors header (the two fixtures move together), (3) the
-/// model's <c>bgrl.encoding_version</c> matches the encoder (evaluator
-/// tests), (4) board→features is bit-exact, (5) features→output is within
-/// the fixture's tolerance (evaluator tests). Steps 3 and 5 live with
-/// <c>OnnxEvaluator</c>; a red anywhere here means the C# consumer and the
-/// Python producer no longer agree and nothing downstream can be trusted.
+/// model's <c>bgrl.encoding_version</c> matches the encoder, (4) board→features
+/// is bit-exact, (5) features→output is within the fixture's tolerance. All
+/// five live here; a red anywhere here means the C# consumer and the Python
+/// producer no longer agree and nothing downstream can be trusted.
 /// </summary>
 public sealed class ParityGateTests
 {

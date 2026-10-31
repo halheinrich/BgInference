@@ -22,9 +22,11 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 /// </para>
 ///
 /// <para>
-/// Instances are safe for concurrent <see cref="Evaluate"/> /
-/// <see cref="EvaluateBatch"/> calls (ONNX Runtime sessions are thread-safe
-/// for inference). Dispose releases the native session.
+/// Concurrent <see cref="Evaluate"/> / <see cref="EvaluateBatch"/> calls rest
+/// on ONNX Runtime's documented statement that multiple threads can invoke
+/// <c>Run()</c> on one session (its architecture reference); each call
+/// otherwise uses only its own locals, and no test here exercises concurrency.
+/// Dispose releases the native session.
 /// </para>
 /// </summary>
 public sealed class OnnxEvaluator : IPositionEvaluator, IDisposable

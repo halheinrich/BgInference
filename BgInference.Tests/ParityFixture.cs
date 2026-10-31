@@ -10,7 +10,7 @@ using BgDataTypes_Lib;
 /// model) and <c>parity/vectors.json</c> (28 golden board→features→output
 /// triples, sha256-paired to the model). Consumed in place — never copied —
 /// so the fixtures have exactly one source of truth; the gate's sha256 step
-/// makes a stale pairing impossible.
+/// compares the model file's hash to the value in the vectors header.
 /// </summary>
 internal static class ParityFixture
 {

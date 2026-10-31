@@ -4,8 +4,8 @@ namespace BgInference;
 /// Per-outcome-class weights for folding a <see cref="PositionEvaluation"/>
 /// into an equity, mirroring the producer's
 /// <c>engine/network.py::compute_equity</c>. Match-score-dependent weight
-/// sets (DMP, leader/trailer cube states) belong to a future MET arc; v1
-/// ships only the cubeless money fold.
+/// sets (DMP, leader/trailer cube states) belong to a future MET arc
+/// (halheinrich/backgammon#483); v1 ships only the cubeless money fold.
 /// </summary>
 /// <param name="Win">Weight for a single win.</param>
 /// <param name="WinGammon">Weight for a gammon win.</param>

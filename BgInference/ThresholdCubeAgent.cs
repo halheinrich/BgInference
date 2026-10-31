@@ -13,9 +13,9 @@ using BgGame_Lib;
 /// take when own equity is at least <see cref="TakeEquityThreshold"/> (the
 /// classic dead-cube take point). What this ignores — cube ownership value,
 /// recube vig, too-good-to-double gammon plays, market-losing sequences, and
-/// all match-score dependence — is exactly what the recorded MET/Janowski
-/// arc replaces this class with. The constants are contract, not tuning:
-/// change them only with tests.
+/// all match-score dependence — is exactly what a MET/Janowski agent would
+/// replace this class to handle (halheinrich/backgammon#483). The constants
+/// are contract, not tuning: change them only with tests.
 /// </para>
 ///
 /// <para>
