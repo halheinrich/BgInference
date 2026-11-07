@@ -6,14 +6,31 @@ using BgInference;
 
 /// <summary>
 /// The v1 threshold cube policy: boundary semantics on both constants, and —
-/// load-bearing — that the response side reads the responder's own frame
-/// directly. Under the unified perspective convention the responder is queried
-/// in its own frame, so no negation is applied; the two-direction pin guards
-/// against a stray one being reintroduced.
+/// load-bearing — that the response side negates. Both decisions are queried
+/// with the on-roll-frame snapshot (halheinrich/backgammon#533), and the
+/// evaluator answers for the player on roll, the offerer; the responder is the
+/// other side, so its own equity is the negation. The two-direction pins guard
+/// against a missing or a doubled negation, and against a mirrored board.
 /// </summary>
 public sealed class ThresholdCubeAgentTests
 {
-    private static GameState SomeState() => GameState.NewGame(MatchState.NewMatch(0));
+    private static GameSnapshot SomeState() => GameState.NewGame(MatchState.NewMatch(0)).Snapshot();
+
+    /// <summary>
+    /// Asymmetric, so neither a fixed position nor the mirror of this one can
+    /// stand in for it.
+    /// </summary>
+    private static GameSnapshot Asymmetric()
+    {
+        var counts = new int[26];
+        counts[6] = 3;
+        counts[8] = 2;
+        counts[19] = -4;
+        var position = new BoardPosition(counts);
+        Assert.NotEqual(position, position.Flipped());
+        return GameState.FromPosition(
+            MatchState.NewMatch(0), new BoardState(position), cubeSize: 1, CubeOwner.Centered).Snapshot();
+    }
 
     /// <summary>An evaluator whose folded money equity for any board is exactly <paramref name="equity"/>.</summary>
     private static ThresholdCubeAgent AgentSeeing(float equity) =>
@@ -32,53 +49,57 @@ public sealed class ThresholdCubeAgentTests
     }
 
     [Theory]
-    [InlineData(-0.5f, CubeAction.Take)]     // own equity −0.5: dead-cube boundary, inclusive
-    [InlineData(-0.51f, CubeAction.Pass)]    // own equity −0.51: below the take point
+    [InlineData(0.5f, CubeAction.Take)]      // responder's own equity −0.5: dead-cube boundary, inclusive
+    [InlineData(0.51f, CubeAction.Pass)]     // responder's own equity −0.51: below the take point
     [InlineData(0f, CubeAction.Take)]
-    [InlineData(0.3f, CubeAction.Take)]      // a bad double: happily taken
-    public async Task Response_TakesAtOrAboveTakePoint(float ownEquity, CubeAction expected)
+    [InlineData(-0.3f, CubeAction.Take)]     // a bad double: happily taken
+    public async Task Response_TakesAtOrAboveTakePoint(float onRollEquity, CubeAction expected)
     {
-        // Responder frame: the evaluator's folded equity is the responder's own.
-        var response = await AgentSeeing(ownEquity).ChooseResponseAsync(SomeState());
+        // The evaluator's folded equity is the on-roll offerer's; the
+        // responder's own is its negation.
+        var response = await AgentSeeing(onRollEquity).ChooseResponseAsync(SomeState());
         Assert.Equal(expected, response);
     }
 
     [Fact]
-    public async Task Response_ReadsResponderFrameEquity_BothDirections()
+    public async Task Response_Take_FromAKnownOnRollEquity_OnTheUnchangedBoard()
     {
-        // The state reaching the responder is already in the responder's own
-        // frame, so the folded equity is read directly.
-        //
-        // Crushed responder (own equity −2): −2 < −0.5 correctly Passes; a stray
-        // negation would flip this to +2 ≥ −0.5 and wrongly Take.
-        Assert.Equal(CubeAction.Pass, await AgentSeeing(-2f).ChooseResponseAsync(SomeState()));
+        // The offerer stands at −2 (the responder at +2): +2 ≥ −0.5 Takes. A
+        // missing negation reads −2 < −0.5 and wrongly Passes.
+        var state = Asymmetric();
+        var evaluator = new TestEvaluators.Recording(new PositionEvaluation(-2f, 0f, 0f, 0f, 0f, 0f));
 
-        // Dominant responder (own equity +2): +2 ≥ −0.5 correctly Takes; a stray
-        // negation would flip this to −2 < −0.5 and wrongly Pass.
-        Assert.Equal(CubeAction.Take, await AgentSeeing(2f).ChooseResponseAsync(SomeState()));
+        var response = await new ThresholdCubeAgent(evaluator).ChooseResponseAsync(state);
+
+        Assert.Equal(CubeAction.Take, response);
+        Assert.Equal([state.Board], evaluator.Seen);   // the on-roll frame, not a mirror
     }
 
     [Fact]
-    public async Task BothDecisions_EvaluateTheStatesOwnPosition()
+    public async Task Response_Pass_FromAKnownOnRollEquity_OnTheUnchangedBoard()
     {
-        // Asymmetric, so neither a fixed position nor the flipped view of this
-        // one can stand in for it.
-        var counts = new int[26];
-        counts[6] = 3;
-        counts[8] = 2;
-        counts[19] = -4;
-        var position = new BoardPosition(counts);
-        Assert.NotEqual(position, position.Flipped());
+        // The offerer stands at +2 (the responder at −2): −2 < −0.5 Passes. A
+        // missing negation reads +2 ≥ −0.5 and wrongly Takes.
+        var state = Asymmetric();
+        var evaluator = new TestEvaluators.Recording(new PositionEvaluation(2f, 0f, 0f, 0f, 0f, 0f));
 
-        var state = GameState.FromPosition(
-            MatchState.NewMatch(0), new BoardState(position), cubeSize: 1, CubeOwner.Centered);
+        var response = await new ThresholdCubeAgent(evaluator).ChooseResponseAsync(state);
+
+        Assert.Equal(CubeAction.Pass, response);
+        Assert.Equal([state.Board], evaluator.Seen);   // the on-roll frame, not a mirror
+    }
+
+    [Fact]
+    public async Task BothDecisions_EvaluateTheSnapshotsOwnPosition()
+    {
+        var state = Asymmetric();
         var evaluator = new TestEvaluators.Recording(new PositionEvaluation(0f, 0f, 0f, 0f, 0f, 0f));
         var agent = new ThresholdCubeAgent(evaluator);
 
         await agent.ChooseOfferAsync(state);
         await agent.ChooseResponseAsync(state);
 
-        Assert.Equal([position, position], evaluator.Seen);
+        Assert.Equal([state.Board, state.Board], evaluator.Seen);
     }
 
     [Fact]

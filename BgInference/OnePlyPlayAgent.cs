@@ -66,7 +66,7 @@ public sealed class OnePlyPlayAgent : IPlayAgent
 
     /// <inheritdoc />
     public ValueTask<Play> ChoosePlayAsync(
-        GameState state,
+        GameSnapshot state,
         int die1,
         int die2,
         CancellationToken cancellationToken = default)
@@ -74,7 +74,8 @@ public sealed class OnePlyPlayAgent : IPlayAgent
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var successors = MoveGenerator.GenerateSuccessors(state.Board, die1, die2);
+        // A working board of the agent's own: the snapshot is a value.
+        var successors = MoveGenerator.GenerateSuccessors(new BoardState(state.Board), die1, die2);
         if (successors.Count == 1)
             return ValueTask.FromResult(successors[0].Play); // dance or forced — nothing to decide
 

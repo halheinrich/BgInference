@@ -19,14 +19,14 @@ using BgGame_Lib;
 /// </para>
 ///
 /// <para>
-/// <b>Perspective.</b> Both methods are queried in the deciding agent's own
-/// frame — the unified convention across every agent query (see
-/// <see cref="ICubeAgent"/>'s perspective contract). The folded equity is
-/// therefore already the deciding player's own on both the offer and the
-/// response side, so neither negates. (The responder frame is constructed by
-/// the driver: <c>MatchRunner</c> hands <see cref="ChooseResponseAsync"/> a
-/// detached <see cref="GameState.OpponentView"/> of the live offerer-frame
-/// state.)
+/// <b>Perspective.</b> Both methods are queried with the same on-roll-frame
+/// snapshot (see <see cref="ICubeAgent"/>'s perspective contract), and the
+/// evaluator answers from the on-roll player's perspective
+/// (<see cref="IPositionEvaluator"/>). On the offer side that player is the
+/// deciding agent, so the folded equity is its own. On the response side the
+/// deciding agent is the opponent of the player on roll, so its own equity is
+/// the folded equity <em>negated</em>; the position handed to the evaluator is
+/// the snapshot's board, unchanged.
 /// </para>
 /// </summary>
 public sealed class ThresholdCubeAgent : ICubeAgent
@@ -55,26 +55,27 @@ public sealed class ThresholdCubeAgent : ICubeAgent
 
     /// <inheritdoc />
     public ValueTask<CubeAction> ChooseOfferAsync(
-        GameState state, CancellationToken cancellationToken = default)
+        GameSnapshot state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        float equity = _evaluator.Evaluate(state.Board.ToPosition()).Equity(EquityWeights.Money);
+        float equity = _evaluator.Evaluate(state.Board).Equity(EquityWeights.Money);
         return ValueTask.FromResult(
             equity >= DoubleEquityThreshold ? CubeAction.Double : CubeAction.NoDouble);
     }
 
     /// <inheritdoc />
     public ValueTask<CubeAction> ChooseResponseAsync(
-        GameState state, CancellationToken cancellationToken = default)
+        GameSnapshot state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Responder-frame convention: the folded equity is already the
-        // responder's own — no negation (see the class's Perspective note).
-        float ownEquity = _evaluator.Evaluate(state.Board.ToPosition()).Equity(EquityWeights.Money);
+        // The evaluator answers for the player on roll, the offerer; the
+        // responder is the other side, so its own equity is the negation (see
+        // the class's Perspective note).
+        float ownEquity = -_evaluator.Evaluate(state.Board).Equity(EquityWeights.Money);
         return ValueTask.FromResult(
             ownEquity >= TakeEquityThreshold ? CubeAction.Take : CubeAction.Pass);
     }

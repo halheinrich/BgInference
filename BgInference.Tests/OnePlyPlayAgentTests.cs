@@ -12,9 +12,11 @@ using BgMoveGen;
 /// </summary>
 public sealed class OnePlyPlayAgentTests
 {
-    private static GameState AtPosition(int[] mop) =>
+    private static GameSnapshot AtPosition(int[] mop) =>
         GameState.FromPosition(
-            MatchState.NewMatch(0), BoardState.FromMop(mop), cubeSize: 1, CubeOwner.Centered);
+            MatchState.NewMatch(0), BoardState.FromMop(mop), cubeSize: 1, CubeOwner.Centered).Snapshot();
+
+    private static GameSnapshot Start() => GameState.NewGame(MatchState.NewMatch(0)).Snapshot();
 
     private static bool Hits(Play play)
     {
@@ -51,7 +53,7 @@ public sealed class OnePlyPlayAgentTests
         mop[18] = -1; // opponent's lone blot: hittable 20/18* with the 2
         mop[1] = -2;  // inert opponent anchor
         var state = AtPosition(mop);
-        var successors = MoveGenerator.GenerateSuccessors(state.Board, die1: 2, die2: 1);
+        var successors = MoveGenerator.GenerateSuccessors(new BoardState(state.Board), die1: 2, die2: 1);
 
         // Scenario validity: both hitting and non-hitting plays must exist,
         // or the pin is vacuous.
@@ -95,7 +97,7 @@ public sealed class OnePlyPlayAgentTests
     /// <para>
     /// For every successor in turn, a scripted evaluator makes that one
     /// position the opponent's worst (so the mover's best, after negation).
-    /// The agent's play is then applied to the live board by the one play
+    /// The agent's play is then applied to a board of the start by the one play
     /// rule (<see cref="BoardState.ApplyPlay"/>), and it must reach exactly
     /// the singled-out position. Walking every index rules out an agent that
     /// returns a fixed candidate, or one beside the one it scored.
@@ -104,8 +106,8 @@ public sealed class OnePlyPlayAgentTests
     [Fact]
     public async Task ChosenPlay_ReachesThePositionScoredBest_ForEverySuccessor()
     {
-        var state = GameState.NewGame(MatchState.NewMatch(0));
-        var successors = MoveGenerator.GenerateSuccessors(state.Board, die1: 3, die2: 1);
+        var state = Start();
+        var successors = MoveGenerator.GenerateSuccessors(new BoardState(state.Board), die1: 3, die2: 1);
         Assert.True(successors.Count > 2, "The scenario needs a choice among several plays.");
 
         for (int k = 0; k < successors.Count; k++)
@@ -116,7 +118,7 @@ public sealed class OnePlyPlayAgentTests
 
             var chosen = await agent.ChoosePlayAsync(state, die1: 3, die2: 1);
 
-            var reached = state.Board.Copy();
+            var reached = new BoardState(state.Board);
             reached.ApplyPlay(chosen);
             Assert.Equal(target, reached.ToPosition());
         }
@@ -142,40 +144,28 @@ public sealed class OnePlyPlayAgentTests
     {
         // A constant evaluator makes every successor equal; argmax semantics
         // (strict improvement only) must keep the first candidate.
-        var state = GameState.NewGame(MatchState.NewMatch(0));
-        var plays = MoveGenerator.GeneratePlays(state.Board, die1: 3, die2: 1);
+        var state = Start();
+        var plays = MoveGenerator.GeneratePlays(new BoardState(state.Board), die1: 3, die2: 1);
         Assert.True(plays.Count > 1);
 
         var agent = new OnePlyPlayAgent(
             new TestEvaluators.Constant(new PositionEvaluation(0.5f, 0f, 0f, 0.5f, 0f, 0f)));
         var chosen = await agent.ChoosePlayAsync(state, die1: 3, die2: 1);
 
-        Assert.True(state.Board.IsSamePlay(plays[0], chosen),
+        Assert.True(new BoardState(state.Board).IsSamePlay(plays[0], chosen),
             $"Expected the first candidate {plays[0].ToNotation()}, got {chosen.ToNotation()}.");
     }
 
     [Fact]
     public async Task ChosenPlay_IsAlwaysLegal()
     {
-        var state = GameState.NewGame(MatchState.NewMatch(0));
+        var state = Start();
 
         var agent = new OnePlyPlayAgent(new TestEvaluators.PipLead());
         var chosen = await agent.ChoosePlayAsync(state, die1: 6, die2: 5);
 
-        Assert.True(MoveGenerator.IsLegalPlay(state.Board, chosen, die1: 6, die2: 5),
+        Assert.True(MoveGenerator.IsLegalPlay(new BoardState(state.Board), chosen, die1: 6, die2: 5),
             $"{chosen.ToNotation()} is not a legal 6-5 from the start.");
-    }
-
-    [Fact]
-    public async Task ChoosePlay_DoesNotMutateTheLiveBoard()
-    {
-        var state = GameState.NewGame(MatchState.NewMatch(0));
-        var before = state.Board.ToPosition();
-
-        var agent = new OnePlyPlayAgent(new TestEvaluators.PipLead());
-        await agent.ChoosePlayAsync(state, die1: 3, die2: 1);
-
-        Assert.Equal(before, state.Board.ToPosition());
     }
 
     [Fact]
@@ -196,7 +186,7 @@ public sealed class OnePlyPlayAgentTests
     public async Task CanceledToken_Throws()
     {
         var agent = new OnePlyPlayAgent(new TestEvaluators.MustNotBeCalled());
-        var state = GameState.NewGame(MatchState.NewMatch(0));
+        var state = Start();
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             async () => await agent.ChoosePlayAsync(state, 3, 1, new CancellationToken(canceled: true)));

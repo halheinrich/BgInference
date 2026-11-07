@@ -44,15 +44,16 @@ the umbrella's `TestData/`.
 ## Depends on
 
 - **BgDataTypes_Lib** — `BoardPosition` (the position value the evaluator
-  takes, each side's borne-off count, and `CheckersPerSide`), `BoardState`
-  (the board a `GameState` holds, read through `ToPosition()`, and the pip
-  and race rules the encoder reads), `Play`, `CubeAction`.
+  takes and a `GameSnapshot` carries, each side's borne-off count, and
+  `CheckersPerSide`), `BoardState` (the one-ply agent's working board, and the
+  pip and race rules the encoder reads), `Play`, `CubeAction`.
 - **BgMoveGen** — `MoveGenerator.GenerateSuccessors` (each legal play with
   the position it leaves the next mover, for one-ply selection). The tests
   also use `GeneratePlays` and `IsLegalPlay`.
-- **BgGame_Lib** — the `IPlayAgent`/`ICubeAgent` contracts and `GameState`.
-  The tests also use `MatchState`, and `MatchRunner` + `SeededDiceSource` for
-  the integration proof.
+- **BgGame_Lib** — the `IPlayAgent`/`ICubeAgent` contracts and the
+  `GameSnapshot` they take. The tests also use `GameState` and `MatchState`
+  to build snapshots, and `MatchRunner` + `SeededDiceSource` for the
+  integration proof.
 - **BgRLEngine** (cross-language, test-time only) — producer of the ONNX
   export contract and the parity fixtures. Not a build dependency.
 
@@ -160,8 +161,8 @@ any export that meets the contract; nothing here is parity-model-specific.
 precedent Hal ruled for `MoveEntryState`'s constructor (2026-09-26, on
 halheinrich/backgammon#273): requiring a board makes a caller holding a
 position build a richer, mutable object for nothing. The one-ply agent hands
-over its successors as positions; the cube agent passes
-`GameState.Board.ToPosition()`. A value cannot be null or be
+over its successors as positions; the cube agent passes the snapshot's
+`Board`, already a position. A value cannot be null or be
 changed by the evaluator, so neither needs saying.
 
 **Agents are thin policies over `IPositionEvaluator`.** `OnePlyPlayAgent`
@@ -172,7 +173,8 @@ the opponent, in the opponent's frame) → batched evaluation of the positions
 tie-break, in the generator's candidate order) → the play of the winning
 successor. The play and the position it was scored on come from the same
 successor, so they cannot be paired wrongly; the agent builds no successor of
-its own and copies no board. It scores the evaluations it gets back by index,
+its own, and its one board is the working copy of the snapshot's position the
+generator needs. It scores the evaluations it gets back by index,
 over their own length, and does not check their count against the successors
 (halheinrich/backgammon#301). Single-legal-play turns (dance/forced) return
 without consulting the evaluator; terminal successors are evaluated like any
@@ -189,7 +191,7 @@ would need.
 
 ## Pitfalls
 
-- **Two perspective boundaries live in this library; each has a named
+- **Three perspective boundaries live in this library; each has a named
   pinning test.** (1) Successor evaluation: a successor is in the next
   mover's frame (`MoveGenerator.GenerateSuccessors`), so `OnePlyPlayAgent`
   negates folded equity —
@@ -197,11 +199,14 @@ would need.
   (2) The encoder's `player_to_move` flag: the public evaluator always encodes
   `true`; the flag exists for the producer's training-record encodings and is
   exercised by the fixture's `player_to_move: false` cases — parity gate +
-  `PlayerToMove_FlipsExactlyOneFeature`. The cube agent is not a third:
-  `ICubeAgent` queries each side in its own frame, so neither decision
-  negates, and `Response_ReadsResponderFrameEquity_BothDirections` fails on a
-  stray negation. A sign change that dodges its pin is a bug in the pin, not
-  a green light.
+  `PlayerToMove_FlipsExactlyOneFeature`. (3) The cube response: every
+  `ICubeAgent` query carries the on-roll-frame snapshot (halheinrich/backgammon#533),
+  so the offer reads the folded equity as its own and the response, the other
+  side, negates it on the unchanged board —
+  `Response_Take_FromAKnownOnRollEquity_OnTheUnchangedBoard` and
+  `Response_Pass_FromAKnownOnRollEquity_OnTheUnchangedBoard` fail on a missing
+  or doubled negation, or a mirrored board. A sign change that dodges its pin
+  is a bug in the pin, not a green light.
 - **A play travels with its position.** Do not rebuild the pairing by zipping
   `GeneratePlays` with a list of positions, or by flipping and applying plays
   here: the successor rule and the flip are BgMoveGen's and BgDataTypes_Lib's.

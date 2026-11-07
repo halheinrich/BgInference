@@ -92,9 +92,9 @@ internal static class TestEvaluators
 internal sealed class FirstPlayAgent : IPlayAgent
 {
     public ValueTask<Play> ChoosePlayAsync(
-        GameState state, int die1, int die2, CancellationToken cancellationToken = default)
+        GameSnapshot state, int die1, int die2, CancellationToken cancellationToken = default)
     {
-        var plays = MoveGenerator.GeneratePlays(state.Board, die1, die2);
+        var plays = MoveGenerator.GeneratePlays(new BoardState(state.Board), die1, die2);
         return ValueTask.FromResult(plays[0]);
     }
 }
@@ -103,10 +103,10 @@ internal sealed class FirstPlayAgent : IPlayAgent
 internal sealed class NeverCubeAgent : ICubeAgent
 {
     public ValueTask<CubeAction> ChooseOfferAsync(
-        GameState state, CancellationToken cancellationToken = default) =>
+        GameSnapshot state, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(CubeAction.NoDouble);
 
     public ValueTask<CubeAction> ChooseResponseAsync(
-        GameState state, CancellationToken cancellationToken = default) =>
+        GameSnapshot state, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(CubeAction.Take);
 }
